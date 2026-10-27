@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620">
+  <defs>
+    <linearGradient id="back" x2="1" y2="1">
+      <stop stop-color="#173e4b"/><stop offset="1" stop-color="#0b202a"/>
+    </linearGradient>
+    <linearGradient id="fish" x2="1" y2="1">
+      <stop stop-color="#d4e5dd"/><stop offset="1" stop-color="#718f89"/>
+    </linearGradient>
+    <radialGradient id="light">
+      <stop stop-color="#6cc5bc" stop-opacity=".34"/><stop offset="1" stop-color="#6cc5bc" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1000" height="620" fill="url(#back)"/>
+  <circle cx="785" cy="170" r="360" fill="url(#light)"/>
+  <g opacity=".3" fill="none" stroke="#a6ddd3">
+    <path d="M0 485c160-63 290 38 445-14s315-87 555-16"/>
+    <path d="M0 530c181-51 291 45 468-8s328-71 532-15"/>
+    <path d="M0 578c163-46 315 29 493-9s323-49 507-12"/>
+  </g>
+  <path d="M265 153c170-70 369-34 465 77 53 62 54 128 7 193-95 133-309 157-486 88-87-34-131-95-129-182 2-83 48-143 143-176z" fill="url(#fish)" fill-opacity=".88"/>
+  <path d="M750 234l133-87-19 112 21 118-137-74z" fill="#bfd4cc" fill-opacity=".8"/>
+  <path d="M378 185c-43 87-49 180-2 279M423 169c-44 93-45 207 2 315M470 159c-35 101-31 221 22 332M516 158c-29 107-14 226 43 329" fill="none" stroke="#7c5a5b" stroke-width="15" stroke-linecap="round" opacity=".8"/>
+  <path d="M331 248c37-69 97-98 163-73 52 20 78 73 66 130-13 61-72 105-140 96-67-9-117-79-89-153z" fill="#c16c6d" fill-opacity=".42" stroke="#d48a85" stroke-width="7"/>
+  <circle cx="299" cy="240" r="10" fill="#18313b"/>
+  <circle cx="296" cy="237" r="3" fill="#e7f1e8"/>
+  <path d="M188 465h625" stroke="#d5e8df" stroke-opacity=".35" stroke-width="2" stroke-dasharray="10 12"/>
+  <g fill="#d9f7eb" font-family="sans-serif" font-size="22" opacity=".8">
+    <text x="54" y="66">ILLUSTRATIVE GILL-COVER ROI</text>
+    <text x="54" y="99" font-size="15" opacity=".75">Place the gill cover at the image center before analysis</text>
+  </g>
+</svg>

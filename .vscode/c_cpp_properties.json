@@ -1,0 +1,60 @@
+{
+    "configurations":  [
+                           {
+                               "name":  "ESP32 Arduino (pH sensor)",
+                               "compilerPath":  "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp-x32/2601/bin/xtensa-esp32-elf-g++.exe",
+                               "compilerArgs":  [
+                                                    "-mlongcalls"
+                                                ],
+                               "includePath":  [
+                                                   "${workspaceFolder}/firmware/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/3.3.12/include/hal/esp32/include",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/3.3.12/include/hal/include",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/3.3.12/cores/esp32/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/3.3.12/variants/esp32/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/3.3.12/libraries/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/3.3.12/include/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/3.3.12/dio_qspi/include",
+                                                   "${env:USERPROFILE}/Documents/Arduino/libraries/Firebase_Arduino_Client_Library_for_ESP8266_and_ESP32/src/**"
+                                               ],
+                               "defines":  [
+                                               "ARDUINO_ARCH_ESP32",
+                                               "ARDUINO_BOARD=\"ESP32_DEV\"",
+                                               "CONFIG_IDF_TARGET_ESP32",
+                                               "ESP32=ESP32"
+                                           ],
+                               "cStandard":  "c17",
+                               "cppStandard":  "c++17",
+                               "intelliSenseMode":  "windows-gcc-x64"
+                           },
+                           {
+                               "name":  "ESP32 Arduino (AI Thinker ESP32-CAM)",
+                               "compilerPath":  "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp-x32/2601/bin/xtensa-esp32-elf-g++.exe",
+                               "compilerArgs":  [
+                                                    "-mlongcalls",
+                                                    "-mfix-esp32-psram-cache-issue",
+                                                    "-mfix-esp32-psram-cache-strategy=memw"
+                                                ],
+                               "includePath":  [
+                                                   "${workspaceFolder}/firmware/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/3.3.12/cores/esp32/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/3.3.12/variants/esp32/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/3.3.12/libraries/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/3.3.12/include/**",
+                                                   "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/3.3.12/qio_qspi/include",
+                                                   "${env:USERPROFILE}/Documents/Arduino/libraries/Firebase_Arduino_Client_Library_for_ESP8266_and_ESP32/src/**"
+                                               ],
+                               "defines":  [
+                                               "ARDUINO_ARCH_ESP32",
+                                               "ARDUINO_BOARD=\"ESP32_DEV\"",
+                                               "CONFIG_IDF_TARGET_ESP32",
+                                               "ESP32=ESP32",
+                                               "BOARD_HAS_PSRAM"
+                                           ],
+                               "cStandard":  "c17",
+                               "cppStandard":  "c++17",
+                               "intelliSenseMode":  "windows-gcc-x64"
+                           }
+                       ],
+    "version":  4
+}
