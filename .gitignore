@@ -45,3 +45,21 @@ app.*.map.json
 /android/app/release
 # Device-specific credentials are local-only.
 /firmware/secrets.h
+**/secrets.h
+.env
+.env.*
+!.env.example
+/config/*.json
+!/config/firebase.example.json
+**/service-account*.json
+**/google-services.json
+**/GoogleService-Info.plist
+node_modules/
+.firebase/
+firmware/.pio/
+*.jks
+*.keystore
+android/key.properties
+.kotlin/
+**/.kotlin/
+/android/build/

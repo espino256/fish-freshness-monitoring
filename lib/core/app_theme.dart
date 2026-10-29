@@ -7,10 +7,10 @@ abstract final class AppColors {
   static const teal = Color(0xFF167D83);
   static const aqua = Color(0xFF70C9C4);
   static const mint = Color(0xFFB7E3D2);
-  static const canvas = Color(0xFFEDF3F4);
-  static const surface = Color(0xFFFAFCFC);
+  static const canvas = Color(0xFFE5EEF0);
+  static const surface = Color(0xFFEAF1F3);
   static const ink = Color(0xFF18343D);
-  static const muted = Color(0xFF71868B);
+  static const muted = Color(0xFF506873);
   static const line = Color(0xFFD6E1E2);
   static const fresh = Color(0xFF287C68);
   static const moderate = Color(0xFFC17B25);
@@ -18,6 +18,18 @@ abstract final class AppColors {
 }
 
 abstract final class AppTheme {
+  static ThemeData get highContrast => light.copyWith(
+    textTheme: light.textTheme.apply(
+      bodyColor: const Color(0xFF061A24),
+      displayColor: const Color(0xFF061A24),
+    ),
+    inputDecorationTheme: light.inputDecorationTheme.copyWith(
+      enabledBorder: const OutlineInputBorder(
+        borderSide: BorderSide(color: Color(0xFF244D60), width: 1.5),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
+      ),
+    ),
+  );
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(
       seedColor: AppColors.teal,
@@ -29,7 +41,7 @@ abstract final class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.canvas,
+      scaffoldBackgroundColor: Colors.transparent,
       fontFamily: 'AquaSans',
       textTheme: const TextTheme(
         headlineLarge: TextStyle(

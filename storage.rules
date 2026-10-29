@@ -1,15 +1,23 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /samples/{sampleId}/images/{fileName} {
-      allow read: if request.auth != null &&
-        request.auth.token.role in ['admin', 'researcher', 'viewer'];
-      allow create, update: if request.auth != null &&
-        request.auth.token.role in ['admin', 'researcher', 'camera_device'] &&
-        request.resource.size < 10 * 1024 * 1024 &&
-        request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null &&
-        request.auth.token.role in ['admin', 'researcher'];
+    function human() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && request.auth.token.get('role', '') != 'ph_device'
+        && request.auth.token.get('role', '') != 'camera_device';
+    }
+    function inspector() {
+      return human() && request.auth.token.get('role', '') in ['inspector', 'admin'];
+    }
+    match /samples/{sampleId}/images/{filename} {
+      allow read: if human();
+      allow create: if inspector() && sampleId.matches('[A-Za-z0-9_-]{1,100}')
+        && filename.matches('[A-Za-z0-9._-]+')
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.metadata.ownerUid == request.auth.uid;
+      allow delete: if inspector() && resource.metadata.ownerUid == request.auth.uid;
+      allow update: if false;
     }
   }
 }

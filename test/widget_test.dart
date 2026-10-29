@@ -1,113 +1,42 @@
 import 'package:aqua_sense/main.dart';
+import 'package:aqua_sense/models/telemetry.dart';
+import 'package:aqua_sense/screens/camera_screen.dart';
+import 'package:aqua_sense/screens/dashboard_screen.dart';
+import 'package:aqua_sense/screens/history_screen.dart';
 import 'package:aqua_sense/screens/login_screen.dart';
+import 'package:aqua_sense/screens/register_screen.dart';
 import 'package:aqua_sense/widgets/aqua_splash.dart';
-import 'package:aqua_sense/widgets/ocean_art.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-
-  testWidgets('dashboard shows honest empty sensor state on mobile', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(const AquaSenseApp());
-    await tester.pumpAndSettle();
-
-    expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('No data · sensor readings unavailable'), findsOneWidget);
-    expect(find.text('0.00'), findsNothing);
-  });
-
-  testWidgets('wide dashboard renders desktop navigation', (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(const AquaSenseApp());
-    await tester.pumpAndSettle();
-
-    expect(find.text('AquaSense'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Monitoring overview'), findsWidgets);
-  });
-
-  testWidgets('dashboard hero renders on compact, tablet, and desktop widths', (
-    tester,
-  ) async {
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    tester.view.devicePixelRatio = 1;
-
-    for (final size in [
-      const Size(320, 760),
-      const Size(768, 1024),
-      const Size(1280, 900),
-    ]) {
-      tester.view.physicalSize = size;
+  testWidgets(
+    'splash lasts 2.5 seconds and missing config fails closed at login',
+    (tester) async {
       await tester.pumpWidget(const AquaSenseApp());
+      expect(find.byType(AquaSplash), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 2499));
+      expect(find.byType(AquaSplash), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
       await tester.pumpAndSettle();
-
-      expect(find.byType(OceanArt), findsOneWidget, reason: '$size');
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byType(DashboardScreen), findsNothing);
       expect(
-        find.text(
-          size.width < 600
-              ? 'Welcome to AquaSense.'
-              : 'Clarity beneath the surface.',
-        ),
+        find.textContaining('Firebase authentication requires configuration'),
         findsOneWidget,
       );
-      expect(tester.takeException(), isNull, reason: '$size');
-    }
-  });
+    },
+  );
 
-  testWidgets('splash screen displays AquaSense branding and loading state', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const MaterialApp(home: AquaSplash()));
-
-    expect(find.text('AquaSense'), findsOneWidget);
-    expect(find.text('Fish Freshness Monitoring System'), findsOneWidget);
-    expect(
-      find.text('Preparing your monitoring environment...'),
-      findsOneWidget,
-    );
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-  });
-
-  testWidgets('login screen validates fields and toggles password visibility', (
-    tester,
-  ) async {
+  testWidgets('login validates inputs and toggles visibility', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
-
-    expect(find.text('Welcome back'), findsOneWidget);
-    expect(
-      find.text('Access is managed by your project administrator.'),
-      findsOneWidget,
-    );
+    await tester.ensureVisible(find.text('Sign in securely'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Sign in securely'));
     await tester.pumpAndSettle();
-    expect(find.text('Enter a valid email address.'), findsOneWidget);
-    expect(find.text('Enter your password.'), findsOneWidget);
-
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Email address'),
-      'researcher@example.com',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Password'),
-      'not-a-real-password',
-    );
     expect(
-      tester.widget<EditableText>(find.byType(EditableText).last).obscureText,
-      isTrue,
+      tester.widget<Text>(find.byKey(const Key('auth-message'))).data,
+      'Enter a valid email address.',
     );
     await tester.tap(find.byTooltip('Show password'));
     await tester.pump();
@@ -117,24 +46,83 @@ void main() {
     );
   });
 
-  testWidgets('login screen adapts from mobile to desktop layouts', (
+  testWidgets(
+    'registration has four fields without roles and validates confirmation',
+    (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
+      expect(find.byType(TextFormField), findsNWidgets(4));
+      expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+      expect(find.text('Requested role'), findsNothing);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'),
+        'some-password',
+      );
+      await tester.ensureVisible(find.text('Register'));
+      await tester.tap(find.text('Register'));
+      await tester.pump();
+      expect(find.text('Passwords do not match.'), findsOneWidget);
+      expect(find.text('Enter your name.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'dashboard has empty and error states without fabricated readings',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(home: DashboardScreen(readings: Stream.value([]))),
+      );
+      await tester.pump();
+      expect(find.textContaining('No telemetry yet'), findsOneWidget);
+      expect(find.textContaining('pH 0.00'), findsNothing);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DashboardScreen(readings: Stream.error(StateError('denied'))),
+        ),
+      );
+      await tester.pump();
+      expect(find.textContaining('Unable to read telemetry'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('stale telemetry never shows LIVE status', (tester) async {
+    final stale = Telemetry(
+      id: 'old',
+      deviceId: 'sensor',
+      ph: 7.2,
+      adcRaw: 2048,
+      measuredVoltage: 1.65,
+      timestamp: DateTime.utc(2020),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: DashboardScreen(readings: Stream.value([stale]))),
+    );
+    await tester.pump();
+    expect(find.textContaining('STALE'), findsOneWidget);
+    expect(find.textContaining('LIVE'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('all feature screens fit compact and wide layouts', (
     tester,
   ) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.devicePixelRatio = 1;
-
-    for (final size in [
-      const Size(360, 780),
-      const Size(768, 1024),
-      const Size(1280, 900),
-    ]) {
-      tester.view.physicalSize = size;
-      await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
-      await tester.pump();
-      expect(find.text('Welcome back'), findsOneWidget, reason: '$size');
-      expect(find.text('Sign in securely'), findsOneWidget, reason: '$size');
-      expect(tester.takeException(), isNull, reason: '$size');
+    for (final width in [320.0, 768.0, 1280.0]) {
+      tester.view.physicalSize = Size(width, 900);
+      for (final page in <Widget>[
+        const LoginScreen(),
+        const RegisterScreen(),
+        const CameraScreen(canSave: false),
+        HistoryScreen(readings: Stream.value([])),
+        DashboardScreen(readings: Stream.value([])),
+      ]) {
+        await tester.pumpWidget(MaterialApp(home: Scaffold(body: page)));
+        await tester.pump();
+        expect(tester.takeException(), isNull, reason: '$page at $width');
+        await tester.pumpWidget(const SizedBox());
+      }
     }
   });
 }

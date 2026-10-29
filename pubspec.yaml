@@ -1,5 +1,5 @@
 name: aqua_sense
-description: "A new Flutter project."
+description: "Mobile fish freshness monitoring with authenticated ESP32 telemetry."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -24,6 +24,8 @@ dependencies:
   share_plus: ^13.3.1
   flutter_svg: ^2.3.0
   intl: ^0.18.1
+  http: ^1.6.0
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:

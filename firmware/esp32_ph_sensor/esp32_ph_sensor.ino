@@ -1,191 +1,132 @@
-
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <time.h>
 #include <math.h>
-#include "../secrets.h"
+#include "secrets.h"
 
-// ESP32 DevKit V1 pin configuration
-constexpr int PH_PIN = 34;
-constexpr int LED_GREEN = 27;
-constexpr int LED_YELLOW = 25;
-constexpr int LED_RED = 26;
+constexpr int PH_PIN = 34, GREEN = 27, YELLOW = 25, RED = 26;
+constexpr uint32_t SAMPLE_MS = 20, PUBLISH_MS = 5000;
+constexpr size_t SAMPLE_COUNT = 32;
+uint16_t rawSamples[SAMPLE_COUNT] = {}, mvSamples[SAMPLE_COUNT] = {};
+size_t cursor = 0, count = 0;
+uint32_t lastSample = 0, lastPublish = 0, lastAuthAttempt = 0, signedInAt = 0;
+uint32_t bootId = 0, sequence = 0;
+String idToken, deviceUid;
+struct OutboundReading { float ph, raw, measured; };
+QueueHandle_t telemetryQueue = nullptr;
 
-constexpr unsigned long SAMPLE_INTERVAL = 20;
-constexpr unsigned long DISPLAY_INTERVAL = 800;
-constexpr unsigned long WIFI_TIMEOUT = 15000;
-constexpr int SAMPLE_COUNT = 10;
-
-// Set these in secrets.h after two-point calibration.
-// PH_CALIBRATION_CONFIRMED = true
-// PH_SLOPE = calibrated slope
-// PH_OFFSET = calibrated offset
-
-#ifndef PH_CALIBRATION_CONFIRMED
-#define PH_CALIBRATION_CONFIRMED false
-#endif
-
-#ifndef PH_SLOPE
-#define PH_SLOPE 0.0f
-#endif
-
-#ifndef PH_OFFSET
-#define PH_OFFSET 0.0f
-#endif
-
-uint32_t phSamples[SAMPLE_COUNT] = {};
-int sampleIndex = 0;
-int samplesCollected = 0;
-
-unsigned long lastSample = 0;
-unsigned long lastDisplay = 0;
-
-enum FreshnessStatus {
-  FRESH,
-  MODERATE,
-  SPOILED,
-  INVALID
-};
-
-void setLEDs(bool green, bool yellow, bool red) {
-  digitalWrite(LED_GREEN, green ? HIGH : LOW);
-  digitalWrite(LED_YELLOW, yellow ? HIGH : LOW);
-  digitalWrite(LED_RED, red ? HIGH : LOW);
+void leds(int state) {
+  digitalWrite(GREEN, state == 0); digitalWrite(YELLOW, state == 1); digitalWrite(RED, state == 2);
 }
-
-void showStatus(FreshnessStatus status) {
-  switch (status) {
-    case FRESH:
-      setLEDs(true, false, false);
-      Serial.println("Status: FRESH");
-      break;
-
-    case MODERATE:
-      setLEDs(false, true, false);
-      Serial.println("Status: MODERATE");
-      break;
-
-    case SPOILED:
-      setLEDs(false, false, true);
-      Serial.println("Status: SPOILED");
-      break;
-
-    default:
-      setLEDs(false, false, false);
-      Serial.println("Status: NOT CALIBRATED / INVALID");
-      break;
+int classification(float ph) {
+  if (!isfinite(ph) || ph < 0 || ph > 14) return -1;
+  return ph < 6.5f ? 0 : ph < 7.2f ? 1 : 2;
+}
+// TLS certificate chain and host verification are mandatory. SNTP sets the clock.
+int request(const String &url, const String &method, const String &payload, String *response = nullptr) {
+  WiFiClientSecure tls;
+  tls.setCACert(FIREBASE_ROOT_CA);
+  tls.setHandshakeTimeout(8);
+  HTTPClient http;
+  http.setConnectTimeout(5000); http.setTimeout(5000);
+  if (!url.startsWith("https://") || !http.begin(tls, url)) return -1;
+  http.addHeader("Content-Type", "application/json");
+  int code = http.sendRequest(method.c_str(), payload);
+  if (response && code == 200) *response = http.getString();
+  http.end();
+  return code;
+}
+bool authenticate() {
+  const uint32_t now = millis();
+  if (idToken.length() && now - signedInAt < 50UL * 60UL * 1000UL) return true;
+  if (now - lastAuthAttempt < 30000) return false;
+  lastAuthAttempt = now;
+  if (WiFi.status() != WL_CONNECTED || time(nullptr) < 1700000000) return false;
+  JsonDocument body;
+  body["email"] = DEVICE_EMAIL; body["password"] = DEVICE_PASSWORD; body["returnSecureToken"] = true;
+  String payload, response;
+  serializeJson(body, payload);
+  const int code = request(String("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=") + FIREBASE_API_KEY, "POST", payload, &response);
+  if (code != 200) { Serial.printf("Device authentication failed (%d).\n", code); return false; }
+  JsonDocument result;
+  if (deserializeJson(result, response) || !result["idToken"].is<String>() || !result["localId"].is<String>()) return false;
+  idToken = result["idToken"].as<String>(); deviceUid = result["localId"].as<String>(); signedInAt = now;
+  return true;
+}
+void publish(float ph, float raw, float measuredVoltage) {
+  if (!authenticate()) return;
+  JsonDocument update;
+  // One atomic update keeps live telemetry and immutable history in sync.
+  const String key = deviceUid + "_" + String(bootId, HEX) + "_" + String(sequence++);
+  JsonObject live = update[String("telemetry/") + deviceUid].to<JsonObject>();
+  live["deviceId"] = deviceUid; live["ph"] = ph; live["adcRaw"] = raw;
+  live["measuredVoltage"] = measuredVoltage; live["timestamp"][".sv"] = "timestamp";
+  update[String("readings/") + key] = live;
+  String payload;
+  serializeJson(update, payload);
+  String base = FIREBASE_DATABASE_URL;
+  while (base.endsWith("/")) base.remove(base.length() - 1);
+  const int code = request(base + "/.json?auth=" + idToken, "PATCH", payload);
+  if (code == 401 || code == 403) idToken = "";
+  if (code != 200) Serial.printf("Telemetry not persisted (%d). No cloud success assumed.\n", code);
+}
+void networkWorker(void *) {
+  OutboundReading reading;
+  for (;;) {
+    if (xQueueReceive(telemetryQueue, &reading, portMAX_DELAY) == pdTRUE && WiFi.status() == WL_CONNECTED) {
+      publish(reading.ph, reading.raw, reading.measured);
+    }
   }
 }
-
-float getAverageVoltage() {
-  uint32_t total = 0;
-
-  for (int i = 0; i < samplesCollected; i++) {
-    total += phSamples[i];
-  }
-
-  if (samplesCollected == 0) return NAN;
-
-  return (total / (float)samplesCollected) / 1000.0f;
-}
-
-FreshnessStatus classifyPH(float ph) {
-  if (!isfinite(ph) || ph < 0 || ph > 14) {
-    return INVALID;
-  }
-
-  // Experimental project thresholds only
-  if (ph >= 6.2f && ph < 6.5f) {
-    return FRESH;
-  }
-
-  if (ph >= 6.5f && ph <= 7.0f) {
-    return MODERATE;
-  }
-
-  if (ph > 7.0f) {
-    return SPOILED;
-  }
-
-  // Values below 6.2 need review
-  return INVALID;
-}
-
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_YELLOW, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-
-  // All LEDs ON during initialization
-  setLEDs(true, true, true);
-  Serial.println("AquaSense initializing...");
-
-  analogReadResolution(12);
-  analogSetPinAttenuation(PH_PIN, ADC_11db);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  Serial.println("Connecting to Wi-Fi...");
-
-  unsigned long start = millis();
-
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - start < WIFI_TIMEOUT) {
-    delay(500);
-    Serial.print(".");
+  for (int pin : {GREEN, YELLOW, RED}) pinMode(pin, OUTPUT);
+  leds(-1);
+  analogReadResolution(12); analogSetPinAttenuation(PH_PIN, ADC_11db);
+  bootId = esp_random();
+  WiFi.mode(WIFI_STA); WiFi.setAutoReconnect(true); WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  telemetryQueue = xQueueCreate(1, sizeof(OutboundReading));
+  if (!telemetryQueue || xTaskCreatePinnedToCore(networkWorker, "cloud", 12288, nullptr, 1, nullptr, 0) != pdPASS) {
+    Serial.println("Cloud worker unavailable; local monitoring only.");
+    telemetryQueue = nullptr;
   }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWi-Fi connected!");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("\nWi-Fi unavailable.");
-    Serial.println("Continuing sensor monitoring offline.");
-  }
-
-  // Turn all LEDs OFF after initialization
-  setLEDs(false, false, false);
-
-  Serial.println("AquaSense pH monitoring ready.");
+  Serial.println("AquaSense: GPIO34 ADC; LEDs GPIO27/25/26. Calibration required.");
 }
-
 void loop() {
-  unsigned long now = millis();
-
-  if (now - lastSample >= SAMPLE_INTERVAL) {
+  const uint32_t now = millis();
+  if (now - lastSample >= SAMPLE_MS) {
     lastSample = now;
-
-    phSamples[sampleIndex] =
-        analogReadMilliVolts(PH_PIN);
-
-    sampleIndex = (sampleIndex + 1) % SAMPLE_COUNT;
-
-    if (samplesCollected < SAMPLE_COUNT) {
-      samplesCollected++;
+    rawSamples[cursor] = analogRead(PH_PIN);
+    mvSamples[cursor] = analogReadMilliVolts(PH_PIN);
+    cursor = (cursor + 1) % SAMPLE_COUNT;
+    if (count < SAMPLE_COUNT) count++;
+  }
+  if (now - lastPublish >= PUBLISH_MS) {
+    lastPublish = now;
+    if (count < SAMPLE_COUNT) { leds(-1); return; }
+    uint32_t rawTotal = 0, mvTotal = 0;
+    bool rail = false;
+    for (size_t i = 0; i < count; i++) {
+      rawTotal += rawSamples[i]; mvTotal += mvSamples[i];
+      if (rawSamples[i] == 0 || rawSamples[i] == 4095) rail = true;
+    }
+    const float raw = rawTotal / float(count), measured = mvTotal / (1000.0f * count);
+    if (!PH_CALIBRATION_CONFIRMED || !isfinite(PH_SLOPE) || PH_SLOPE == 0 || !isfinite(PH_OFFSET) || rail || measured > 3.3f) {
+      leds(-1); Serial.printf("Uncalibrated/invalid: measured %.4f V, nominal %.4f V\n", measured, raw * 3.3f / 4095.0f); return;
+    }
+    const float ph = PH_SLOPE * measured + PH_OFFSET;
+    const int state = classification(ph);
+    leds(state);
+    if (state < 0) { Serial.println("Invalid pH; not published."); return; }
+    Serial.printf("pH %.3f, measured %.4f V, nominal %.4f V\n", ph, measured, raw * 3.3f / 4095.0f);
+    if (telemetryQueue) {
+      OutboundReading reading{ph, raw, measured};
+      xQueueOverwrite(telemetryQueue, &reading);
     }
   }
-
-  if (now - lastDisplay >= DISPLAY_INTERVAL) {
-    lastDisplay = now;
-
-    float voltage = getAverageVoltage();
-
-    Serial.printf("Voltage: %.3f V | ", voltage);
-
-    if (!PH_CALIBRATION_CONFIRMED ||
-        PH_SLOPE == 0.0f) {
-      showStatus(INVALID);
-      return;
-    }
-
-    float ph = PH_SLOPE * voltage + PH_OFFSET;
-
-    Serial.printf("pH: %.2f | ", ph);
-
-    FreshnessStatus status = classifyPH(ph);
-    showStatus(status);
-  }
+  delay(1);
 }

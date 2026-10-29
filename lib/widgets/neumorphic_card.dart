@@ -23,10 +23,15 @@ class NeumorphicCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: Colors.white.withValues(alpha: 0.78)),
         boxShadow: [
+          const BoxShadow(
+            color: Color(0xEEFFFFFF),
+            offset: Offset(-5, -5),
+            blurRadius: 14,
+          ),
           BoxShadow(
-            color: const Color(0xFF42636B).withValues(alpha: 0.09),
-            offset: const Offset(0, 8),
-            blurRadius: 24,
+            color: const Color(0xFF42636B).withValues(alpha: 0.19),
+            offset: const Offset(6, 7),
+            blurRadius: 16,
           ),
         ],
       ),
