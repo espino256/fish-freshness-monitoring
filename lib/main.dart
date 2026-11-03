@@ -1,18 +1,24 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart' show Firebase;
 import 'package:flutter/material.dart';
-import 'core/app_theme.dart';
+
 import 'core/app_preferences.dart';
+import 'core/app_theme.dart';
+import 'firebase_options.dart';
 import 'screens/app_shell.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_session_controller.dart';
 import 'services/firebase_service.dart';
 import 'widgets/aqua_splash.dart';
-import 'widgets/soft_ui.dart';
 import 'widgets/auth_navigation.dart';
+import 'widgets/soft_ui.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const AquaSenseApp());
 }
 

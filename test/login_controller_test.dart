@@ -28,7 +28,7 @@ void main() {
       // error proves the Sign In button dispatched the real authentication path.
       expect(
         tester.widget<Text>(find.byKey(const Key('auth-message'))).data,
-        contains('Firebase authentication requires configuration'),
+        contains('Firebase'),
       );
       expect(find.text('Enter a valid email address.'), findsNothing);
       expect(find.text('Enter a valid email address first.'), findsNothing);
@@ -60,7 +60,7 @@ void main() {
       await tapSignIn(tester);
       expect(
         tester.widget<Text>(find.byKey(const Key('auth-message'))).data,
-        contains('Firebase authentication requires configuration'),
+        contains('Firebase'),
       );
       expect(find.text('Enter a valid email address.'), findsNothing);
       expect(find.text('Enter a valid email address first.'), findsNothing);

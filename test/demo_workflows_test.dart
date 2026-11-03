@@ -152,7 +152,7 @@ void main() {
         expect(find.byType(SnackBar), findsOneWidget);
         expect(
           tester.widget<Text>(find.byKey(const Key('auth-message'))).data,
-          contains('Firebase authentication requires configuration'),
+          contains('Unable to complete authentication'),
         );
         expect(find.byType(AppShell), findsNothing);
         expect(find.textContaining('reset link was sent'), findsNothing);
@@ -185,7 +185,7 @@ void main() {
       expect(find.byType(SnackBar), findsOneWidget);
       expect(
         tester.widget<Text>(find.byKey(const Key('registration-error'))).data,
-        contains('Firebase authentication requires configuration'),
+        contains('Unable to complete authentication'),
       );
       expect(find.byType(AppShell), findsNothing);
       await tapText(tester, 'Dismiss');

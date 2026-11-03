@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../firebase_options.dart';
 import '../models/fish_sample.dart';
 import 'registration_service.dart';
 
@@ -26,17 +27,14 @@ abstract final class FirebaseService {
   static Future<void>? _initialization;
   static Future<void> initialize() async {
     if (isReady) return;
-    if (!isConfigured) {
-      throw StateError(
-        'Firebase authentication requires configuration. Set up .env, run scripts/Build-Config.ps1, and launch with --dart-define-from-file=config/firebase.local.json.',
-      );
-    }
     await (_initialization ??= _initializeDefault());
   }
 
   static Future<void> _initializeDefault() async {
     try {
-      await Firebase.initializeApp(options: options);
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     } finally {
       _initialization = null;
     }
@@ -56,12 +54,7 @@ abstract final class FirebaseService {
         'Google sign-in is supported on Android, iOS, macOS and web. Use email sign-in on this platform.',
       );
     }
-    const clientId = String.fromEnvironment('GOOGLE_CLIENT_ID');
-    const serverId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
-    _googleInitialization ??= GoogleSignIn.instance.initialize(
-      clientId: clientId.isEmpty ? null : clientId,
-      serverClientId: serverId.isEmpty ? null : serverId,
-    );
+    _googleInitialization ??= GoogleSignIn.instance.initialize();
     await _googleInitialization;
     final account = await GoogleSignIn.instance.authenticate();
     final token = account.authentication.idToken;
@@ -75,37 +68,9 @@ abstract final class FirebaseService {
     );
   }
 
-  static const _apiKey = String.fromEnvironment('FIREBASE_API_KEY');
-  static const _appId = String.fromEnvironment('FIREBASE_APP_ID');
-  static const _senderId = String.fromEnvironment(
-    'FIREBASE_MESSAGING_SENDER_ID',
-  );
-  static const _projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
-  static const _authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
-  static const _iosBundleId = String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID');
-  static const _databaseUrl = String.fromEnvironment('FIREBASE_DATABASE_URL');
-  static const _storageBucket = String.fromEnvironment(
-    'FIREBASE_STORAGE_BUCKET',
-  );
+  static bool get isConfigured => true;
 
-  static bool get isConfigured =>
-      _apiKey.isNotEmpty &&
-      _appId.isNotEmpty &&
-      _senderId.isNotEmpty &&
-      _projectId.isNotEmpty &&
-      _databaseUrl.isNotEmpty &&
-      _storageBucket.isNotEmpty;
-
-  static FirebaseOptions get options => FirebaseOptions(
-    apiKey: _apiKey,
-    appId: _appId,
-    messagingSenderId: _senderId,
-    projectId: _projectId,
-    databaseURL: _databaseUrl,
-    storageBucket: _storageBucket,
-    authDomain: _authDomain.isEmpty ? null : _authDomain,
-    iosBundleId: _iosBundleId.isEmpty ? null : _iosBundleId,
-  );
+  static FirebaseOptions get options => DefaultFirebaseOptions.currentPlatform;
 
   static bool get isReady =>
       Firebase.apps.any((app) => app.name == '[DEFAULT]');

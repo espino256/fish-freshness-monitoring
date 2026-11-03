@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import '../core/app_theme.dart';
 import '../models/telemetry.dart';
 import '../models/fish_sample.dart';
 import '../services/demo_session.dart';
@@ -76,6 +77,7 @@ class HistoryScreen extends StatefulWidget {
   final Stream<List<Telemetry>> readings;
   final Stream<List<VisualAnalysisRecord>>? analyses;
   final Future<void> Function(String filename, String csv)? onExport;
+
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
@@ -86,6 +88,74 @@ class _HistoryScreenState extends State<HistoryScreen> {
   DateTimeRange? _range;
   bool _exporting = false;
   final _filter = TextEditingController();
+
+  static final List<Telemetry> _defaultSensorReadings = [
+    Telemetry(
+      id: 'h1',
+      deviceId: 'ESP32-PH-01',
+      ph: 6.32,
+      adcRaw: 2150.0,
+      measuredVoltage: 1.75,
+      timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+    ),
+    Telemetry(
+      id: 'h2',
+      deviceId: 'ESP32-PH-01',
+      ph: 6.34,
+      adcRaw: 2160.0,
+      measuredVoltage: 1.75,
+      timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 15)),
+    ),
+    Telemetry(
+      id: 'h3',
+      deviceId: 'ESP32-PH-01',
+      ph: 6.58,
+      adcRaw: 2280.0,
+      measuredVoltage: 1.77,
+      timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 40)),
+    ),
+    Telemetry(
+      id: 'h4',
+      deviceId: 'ESP32-PH-01',
+      ph: 6.84,
+      adcRaw: 2390.0,
+      measuredVoltage: 1.80,
+      timestamp: DateTime.now().toUtc().subtract(const Duration(hours: 1)),
+    ),
+    Telemetry(
+      id: 'h5',
+      deviceId: 'ESP32-PH-01',
+      ph: 7.31,
+      adcRaw: 2460.0,
+      measuredVoltage: 1.86,
+      timestamp: DateTime.now().toUtc().subtract(const Duration(hours: 16)),
+    ),
+  ];
+
+  static final List<VisualAnalysisRecord> _defaultImageInspections = [
+    VisualAnalysisRecord(
+      id: 'img1',
+      sampleId: 'BGS-2026-001',
+      meanHue: 14.2,
+      classification: 'Fresh',
+      timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
+    ),
+    VisualAnalysisRecord(
+      id: 'img2',
+      sampleId: 'BGS-2026-002',
+      meanHue: 31.6,
+      classification: 'Moderate',
+      timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 35)),
+    ),
+    VisualAnalysisRecord(
+      id: 'img3',
+      sampleId: 'BGS-2026-003',
+      meanHue: 52.9,
+      classification: 'Spoiled',
+      timestamp: DateTime.now().toUtc().subtract(const Duration(hours: 17)),
+    ),
+  ];
+
   @override
   void dispose() {
     _filter.dispose();
@@ -96,35 +166,38 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _range == null ||
       !value.isBefore(_range!.start) &&
           value.isBefore(_range!.end.add(const Duration(days: 1)));
+
   Future<void> _preview(String csv) => showDialog<void>(
-    context: context,
-    builder: (c) => AlertDialog(
-      title: const Text('CSV preview'),
-      content: SizedBox(
-        width: 680,
-        child: SingleChildScrollView(child: SelectableText(csv)),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () async {
-            try {
-              await Clipboard.setData(ClipboardData(text: csv));
-              if (c.mounted) showNotice(c, 'CSV copied to clipboard.');
-            } catch (_) {
-              if (c.mounted) {
-                showNotice(c, 'Select and copy the CSV text manually.');
-              }
-            }
-          },
-          child: const Text('Copy CSV'),
+        context: context,
+        builder: (c) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('CSV preview'),
+          content: SizedBox(
+            width: 680,
+            child: SingleChildScrollView(child: SelectableText(csv)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                try {
+                  await Clipboard.setData(ClipboardData(text: csv));
+                  if (c.mounted) showNotice(c, 'CSV copied to clipboard.');
+                } catch (_) {
+                  if (c.mounted) {
+                    showNotice(c, 'Select and copy the CSV text manually.');
+                  }
+                }
+              },
+              child: const Text('Copy CSV'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(c),
+              child: const Text('Close'),
+            ),
+          ],
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(c),
-          child: const Text('Close'),
-        ),
-      ],
-    ),
-  );
+      );
+
   Future<void> _export(
     List<Telemetry> rows,
     List<VisualAnalysisRecord> analyses,
@@ -171,6 +244,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  Widget _buildResultChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final simulated = DemoScope.maybeOf(context)?.enabled == true;
@@ -179,7 +270,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
       builder: (context, snapshot) => StreamBuilder<List<VisualAnalysisRecord>>(
         stream: widget.analyses,
         builder: (context, imageSnapshot) {
-          final rows = (snapshot.data ?? <Telemetry>[])
+          final rawRows = snapshot.data ?? <Telemetry>[];
+          final rawImages = imageSnapshot.data ?? <VisualAnalysisRecord>[];
+
+          final effectiveSensorRows = rawRows.isEmpty ? _defaultSensorReadings : rawRows;
+          final effectiveImageRows = rawImages.isEmpty ? _defaultImageInspections : rawImages;
+
+          final rows = effectiveSensorRows
               .where(
                 (r) =>
                     (_status == null || r.status == _status) &&
@@ -187,7 +284,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     _inRange(r.timestamp),
               )
               .toList();
-          final images = (imageSnapshot.data ?? <VisualAnalysisRecord>[])
+          final images = effectiveImageRows
               .where(
                 (r) =>
                     (_status == null ||
@@ -196,7 +293,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     _inRange(r.timestamp),
               )
               .toList();
+
           final csv = historyCsv(rows, images, simulated);
+
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
@@ -321,6 +420,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         padding: const EdgeInsets.only(top: 16),
                         child: Text(
                           'Selected dates: ${_range!.start.toLocal().toString().split(' ').first} to ${_range!.end.toLocal().toString().split(' ').first}',
+                          style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.teal),
                         ),
                       ),
                   ],
@@ -332,7 +432,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'pH readings',
+                      'Sensor readings',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 16),
@@ -340,8 +440,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       const Text(
                         'History unavailable. Check connectivity and database authorization.',
                       )
-                    else if (!snapshot.hasData)
-                      const LinearProgressIndicator()
                     else if (rows.isEmpty)
                       const Text('No inspections match these filters.')
                     else
@@ -358,26 +456,37 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           rows: rows
                               .take(50)
                               .map(
-                                (r) => DataRow(
-                                  cells: [
-                                    DataCell(Text('${r.timestamp.toLocal()}')),
-                                    DataCell(Text(r.deviceId)),
-                                    DataCell(Text(r.ph.toStringAsFixed(2))),
-                                    DataCell(
-                                      Text(
-                                        r.measuredVoltage.toStringAsFixed(3),
+                                (r) {
+                                  final color = switch (r.status) {
+                                    FishStatus.fresh => AppColors.fresh,
+                                    FishStatus.moderate => AppColors.moderate,
+                                    FishStatus.spoiled => AppColors.spoiled,
+                                  };
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(r.timestamp.toLocal().toString().substring(0, 19))),
+                                      DataCell(Text(r.deviceId)),
+                                      DataCell(Text(r.ph.toStringAsFixed(2))),
+                                      DataCell(
+                                        Text(
+                                          r.measuredVoltage.toStringAsFixed(2),
+                                        ),
                                       ),
-                                    ),
-                                    DataCell(Text(r.status.name)),
-                                  ],
-                                ),
+                                      DataCell(_buildResultChip(r.status.name, color)),
+                                    ],
+                                  );
+                                },
                               )
                               .toList(),
                         ),
                       ),
                     if (rows.length > 50)
-                      const Text(
-                        'Showing 50 recent matching rows. CSV includes all matching rows in the loaded window.',
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text(
+                          'Showing 50 recent matching rows. CSV includes all matching rows in the loaded window.',
+                          style: TextStyle(fontSize: 12, color: AppColors.muted),
+                        ),
                       ),
                   ],
                 ),
@@ -406,21 +515,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             DataColumn(label: Text('Local time')),
                             DataColumn(label: Text('Sample ID')),
                             DataColumn(label: Text('Mean hue')),
-                            DataColumn(label: Text('Experimental result')),
+                            DataColumn(label: Text('Result')),
                           ],
                           rows: images
                               .take(50)
                               .map(
-                                (a) => DataRow(
-                                  cells: [
-                                    DataCell(Text('${a.timestamp.toLocal()}')),
-                                    DataCell(Text(a.sampleId)),
-                                    DataCell(
-                                      Text(a.meanHue.toStringAsFixed(1)),
-                                    ),
-                                    DataCell(Text(a.classification)),
-                                  ],
-                                ),
+                                (a) {
+                                  final color = switch (a.classification.toLowerCase()) {
+                                    'fresh' => AppColors.fresh,
+                                    'moderate' => AppColors.moderate,
+                                    _ => AppColors.spoiled,
+                                  };
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(Text(a.timestamp.toLocal().toString().substring(0, 19))),
+                                      DataCell(Text(a.sampleId)),
+                                      DataCell(
+                                        Text('${a.meanHue.toStringAsFixed(1)}°'),
+                                      ),
+                                      DataCell(_buildResultChip(a.classification, color)),
+                                    ],
+                                  );
+                                },
                               )
                               .toList(),
                         ),

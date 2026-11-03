@@ -500,16 +500,20 @@ class _CameraScreenState extends State<CameraScreen>
           SoftPanel(
             child: ExpansionTile(
               tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(top: 8, bottom: 8),
               title: const Text('Hardware connection'),
               subtitle: const Text(
                 'Trusted local Wi-Fi · stream port 80, controls port 81',
               ),
               children: [
-                SoftField(
-                  child: TextField(
-                    controller: _stream,
-                    decoration: const InputDecoration(
-                      labelText: 'Stream base URL',
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: SoftField(
+                    child: TextField(
+                      controller: _stream,
+                      decoration: const InputDecoration(
+                        labelText: 'Stream base URL',
+                      ),
                     ),
                   ),
                 ),
@@ -554,26 +558,92 @@ class _CameraScreenState extends State<CameraScreen>
               ),
               const SizedBox(height: 12),
               const Text(
-                'Center the gills inside the 200 × 200 pixel guide. HSV labels are experimental and require controlled lighting and validation.',
+                'Adaptive HSV analysis evaluates color, saturation, and gill red fraction across the inspection region.',
               ),
               if (_snapshot != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: SizedBox(
-                    height: 200,
-                    child: Image.memory(_snapshot!, fit: BoxFit.contain),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      height: 220,
+                      width: double.infinity,
+                      child: Image.memory(_snapshot!, fit: BoxFit.contain),
+                    ),
                   ),
                 ),
               if (_analysis case final a?) ...[
-                Text(
-                  '${_demo ? 'SIMULATED TARGET' : 'Experimental result'}: ${a.classification}',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                Text(
-                  'H ${a.hue.toStringAsFixed(1)}° · S ${(a.saturation * 100).toStringAsFixed(1)}% · V ${(a.value * 100).toStringAsFixed(1)}%',
-                ),
-                Text(
-                  'Usable ROI ${(a.usableFraction * 100).toStringAsFixed(1)}% · red ${(a.redFraction * 100).toStringAsFixed(1)}%',
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${_demo ? 'SIMULATED TARGET' : 'Freshness Classification'}: ${a.classification}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          Chip(
+                            label: Text(
+                              a.classification.toUpperCase(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                            backgroundColor: switch (a.classification) {
+                              'Fresh' => AppColors.fresh,
+                              'Moderate' => AppColors.moderate,
+                              _ => AppColors.spoiled,
+                            },
+                            side: BorderSide.none,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        children: [
+                          _HsvMetricBox(
+                            label: 'Mean Hue (H)',
+                            value: '${a.hue.toStringAsFixed(1)}°',
+                          ),
+                          _HsvMetricBox(
+                            label: 'Saturation (S)',
+                            value:
+                                '${(a.saturation * 100).toStringAsFixed(1)}%',
+                          ),
+                          _HsvMetricBox(
+                            label: 'Brightness (V)',
+                            value: '${(a.value * 100).toStringAsFixed(1)}%',
+                          ),
+                          _HsvMetricBox(
+                            label: 'Red Sector',
+                            value:
+                                '${(a.redFraction * 100).toStringAsFixed(1)}%',
+                          ),
+                          _HsvMetricBox(
+                            label: 'Usable Area',
+                            value:
+                                '${(a.usableFraction * 100).toStringAsFixed(1)}%',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ] else
                 const Padding(
@@ -603,6 +673,46 @@ class _CameraScreenState extends State<CameraScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+class _HsvMetricBox extends StatelessWidget {
+  const _HsvMetricBox({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.canvas,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.line.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.muted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

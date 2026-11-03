@@ -122,6 +122,7 @@ class _AppShellState extends State<AppShell> {
       0 => DashboardScreen(
         key: ValueKey('dashboard-$_revision'),
         readings: _live!,
+        historyReadings: _history,
         onRefresh: _refresh,
       ),
       1 => CameraScreen(canSave: _inspector),

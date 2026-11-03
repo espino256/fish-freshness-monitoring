@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'splash lasts 2.5 seconds and missing config fails closed at login',
+    'splash lasts 2.5 seconds and opens login when no user is signed in',
     (tester) async {
       await tester.pumpWidget(const AquaSenseApp());
       expect(find.byType(AquaSplash), findsOneWidget);
@@ -21,10 +21,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(find.byType(DashboardScreen), findsNothing);
-      expect(
-        find.textContaining('Firebase authentication requires configuration'),
-        findsOneWidget,
-      );
     },
   );
 

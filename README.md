@@ -8,11 +8,8 @@ Requirements: Flutter 3.38.6 / Dart 3.10.7 or compatible newer SDK and a configu
 
 ```powershell
 flutter pub get
-Copy-Item .env.example .env
-# Fill .env locally with the Firebase app registered for your platform.
-powershell -ExecutionPolicy Bypass -File scripts/Build-Config.ps1
 firebase deploy --project YOUR_PROJECT_ID --only database,storage
-flutter run --dart-define-from-file=config/firebase.local.json
+flutter run
 ```
 
 A branded splash runs for 2.5 seconds at startup. If Firebase startup fails or times out, the app stays on the login screen with a connection/setup message. Auth actions retry initialization and show errors without granting access. Successful sign-in or account creation immediately opens AppShell with the active Firebase UID and clears pushed authentication routes, without waiting for an auth-stream event. Display preferences cannot authenticate a user.
@@ -36,23 +33,16 @@ fallback account is created. No passwords are stored in the database.
 
 Deploy the updated profile rules before registration testing:
 `firebase deploy --project YOUR_PROJECT_ID --only database`.
-Enable **Email/Password** in Firebase Authentication, generate your ignored build
-config with `scripts/Build-Config.ps1`, and launch with
-`flutter run --dart-define-from-file=config/firebase.local.json`.
-Without Firebase configuration, Register displays setup instructions and remains
-on the form. Existing legacy profiles remain readable; new profiles contain no
-role/category field.
+Enable **Email/Password** in Firebase Authentication. Firebase options are configured in `lib/firebase_options.dart`.
 
-`.env`, generated `config/firebase.local.json`, device `secrets.h`, native Firebase configuration files, service-account JSON, caches and build outputs are ignored by Git. Only placeholders are committed. The PowerShell script parses values as data, does not execute `.env` contents, rejects missing required values, and does not print them. Process environment values override `.env` for CI. Never add `.env` to Flutter assets. Build a separate configuration for each Firebase app/platform; iOS also needs `FIREBASE_IOS_BUNDLE_ID`.
-
-**Environment injection keeps configuration out of source control; it cannot make Firebase client identifiers secret inside a shipped APK, IPA or web bundle.** Firebase API keys identify your project and are extractable from client applications. Authorization comes from Authentication and Security Rules. Never include service-account private keys, database legacy secrets, device passwords or Admin SDK credentials in the Flutter build. If your policy requires the Firebase configuration itself never to reach clients, use a separately authenticated server API instead of the direct Firebase client SDK architecture in this repository.
+`lib/firebase_options.dart`, device `secrets.h`, native Firebase configuration files, service-account JSON, caches and build outputs manage configuration. Never include service-account private keys, database legacy secrets, device passwords or Admin SDK credentials in the Flutter build. If your policy requires the Firebase configuration itself never to reach clients, use a separately authenticated server API instead of the direct Firebase client SDK architecture in this repository.
 
 Official references: [Firebase API keys](https://firebase.google.com/docs/projects/api-keys), [security checklist](https://firebase.google.com/support/guides/security-checklist), and [custom claims](https://firebase.google.com/docs/auth/admin/custom-claims).
 
 Before connecting devices:
 
 1. Enable Email/Password sign-in. Set an appropriate Firebase password policy and email templates; authorize your web application's domain if using web.
-2. Create RTDB and Storage in your selected region. Put their exact URLs/bucket names in `.env`. Restrict Firebase API keys to required APIs and supported application restrictions; use separate appropriately restricted client and device keys where needed.
+2. Create RTDB and Storage in your selected region. Configure their URLs/bucket names in `lib/firebase_options.dart`. Restrict Firebase API keys to required APIs and supported application restrictions; use separate appropriately restricted client and device keys where needed.
 3. Review and deploy the included rules to your own project:
 
    ```powershell
@@ -156,7 +146,7 @@ HTTP Basic authentication does **not** encrypt the LAN traffic. Use an isolated 
 For Flutter web, run on a fixed local origin matching `CAMERA_ALLOWED_ORIGIN`, for example:
 
 ```powershell
-flutter run -d chrome --web-port 5000 --dart-define-from-file=config/firebase.local.json
+flutter run -d chrome --web-port 5000
 ```
 
 Browsers can block HTTP LAN cameras from HTTPS pages through mixed-content/private-network policies even with CORS. Use the native mobile build or a same-origin HTTPS camera gateway for a hosted web deployment. Do not disable browser security. The MJPEG client parses split JPEG markers, caps buffered frames at 2 MiB, limits render updates, times out stalled streams and closes connections on disposal.
@@ -173,9 +163,9 @@ The initial heuristic labels red fraction ≥0.6 Fresh, ≥0.3 Moderate, otherwi
 dart format lib test
 flutter analyze
 flutter test
-flutter build web --release --dart-define-from-file=config/firebase.local.json
+flutter build web --release
 # Configure your Android application ID and production signing before store release:
-flutter build appbundle --release --dart-define-from-file=config/firebase.local.json
+flutter build appbundle --release
 ```
 
 Android release builds require process environment variables `ANDROID_APPLICATION_ID`, `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Supply them through your protected local/CI environment; keystores are ignored. Release builds fail if these are missing and never fall back to a debug key. Set `ANDROID_APPLICATION_ID` for debug builds too when testing a Firebase app restricted to your registered package. The namespace remains `com.example.aqua_sense` to match the existing native activity. Configure iOS bundle ID, signing, associated Firebase app and target-device permissions before distribution.
@@ -243,7 +233,7 @@ lib/widgets/auth_feedback.dart         authentication error mapping and Snackbar
 lib/services/registration_service.dart real Auth creation and retryable profile/verification setup
 firmware/esp32_ph_sensor/              calibrated ADC, LEDs and authenticated TLS ingestion
 firmware/esp32_cam/                    authenticated LAN MJPEG camera and controls
-scripts/Build-Config.ps1               safe .env → ignored build configuration
+lib/firebase_options.dart              standard FirebaseOptions configuration
 tools/                                trusted claims administration and emulator tests
 database.rules.json / storage.rules    cloud authorization and schema validation
 ```

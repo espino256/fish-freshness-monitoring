@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../core/app_theme.dart';
 
 String authMessage(Object error) {
   if (error is FirebaseAuthException) {
@@ -51,6 +52,32 @@ void showAuthFeedback(BuildContext context, String message) {
         label: 'Dismiss',
         onPressed: () => messenger.hideCurrentSnackBar(),
       ),
+    ),
+  );
+}
+
+void showAuthDialogError(BuildContext context, String message) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Row(
+        children: [
+          Icon(Icons.error_outline, color: AppColors.spoiled),
+          SizedBox(width: 10),
+          Text(
+            'Authentication Alert',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+      content: Text(message, style: const TextStyle(fontSize: 14)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      ],
     ),
   );
 }

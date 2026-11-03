@@ -173,6 +173,7 @@ class SoftField extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: 6),
     decoration: BoxDecoration(
       color: AppColors.canvas,
       borderRadius: BorderRadius.circular(16),
