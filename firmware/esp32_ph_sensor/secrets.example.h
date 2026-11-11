@@ -1,11 +1,11 @@
 #pragma once
-#define WIFI_SSID "replace-me"
-#define WIFI_PASSWORD "replace-me"
-#define FIREBASE_API_KEY "replace-me"
+#define WIFI_SSID "TP-Link_Guest_Mode"
+#define WIFI_PASSWORD "!@#$%^&*()"
+#define FIREBASE_API_KEY "AIzaSyDYBLVJPQwpU1k8ko_5lviqqlZ_QYgUue0"
 #define FIREBASE_DATABASE_URL "https://replace-me-default-rtdb.firebaseio.com"
 // Dedicated Firebase Authentication account with custom role ph_device.
-#define DEVICE_EMAIL "replace-me@example.com"
-#define DEVICE_PASSWORD "replace-with-strong-unique-password"
+#define DEVICE_EMAIL "marylyntamagos@gmail.com"
+#define DEVICE_PASSWORD "123456789"
 // Public CA certificates, NOT private keys. Include roots for identitytoolkit.googleapis.com
 // and your RTDB hostname. Keep certificates updated. No insecure TLS fallback exists.
 static const char FIREBASE_ROOT_CA[] = R"PEM(-----BEGIN CERTIFICATE-----

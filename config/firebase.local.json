@@ -1,0 +1,12 @@
+{
+    "GOOGLE_CLIENT_ID":  "",
+    "FIREBASE_DATABASE_URL":  "https://fish-freshness-monitor-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "FIREBASE_IOS_BUNDLE_ID":  "",
+    "FIREBASE_API_KEY":  "AIzaSyDYBLVJPQwpU1k8ko_5lviqqlZ_QYgUue0",
+    "GOOGLE_SERVER_CLIENT_ID":  "",
+    "FIREBASE_STORAGE_BUCKET":  "fish-freshness-monitor.firebasestorage.app",
+    "FIREBASE_AUTH_DOMAIN":  "fish-freshness-monitor.firebaseapp.com",
+    "FIREBASE_APP_ID":  "1:861110707243:web:dbb1a6d9caae800886b66e",
+    "FIREBASE_MESSAGING_SENDER_ID":  "861110707243",
+    "FIREBASE_PROJECT_ID":  "fish-freshness-monitor"
+}
