@@ -254,9 +254,9 @@ void main() {
       await tester.tap(find.text('QVGA 320 × 240').last);
       await tester.pumpAndSettle();
       await tapText(tester, 'Capture & analyze');
-      await reveal(tester, find.text('SIMULATED TARGET: Fresh'));
-      await tapText(tester, 'Save inspection image & result');
-      expect(data.images, hasLength(1));
+      await reveal(tester, find.text('INCONCLUSIVE'));
+      expect(find.textContaining('validated model'), findsOneWidget);
+      expect(data.images, isEmpty);
       await tester.pumpWidget(const SizedBox());
     },
   );

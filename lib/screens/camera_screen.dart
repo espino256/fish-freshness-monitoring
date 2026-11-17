@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/app_theme.dart';
 import '../services/camera_service.dart';
-import '../services/gill_analysis_service.dart';
-import '../services/firebase_service.dart';
 import '../services/demo_session.dart';
+import '../services/visual_inspection_service.dart';
+import '../models/visual_inspection.dart';
 import '../widgets/soft_ui.dart';
 
 class CameraScreen extends StatefulWidget {
@@ -20,15 +20,15 @@ class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
   final _stream = TextEditingController(text: 'http://esp32cam.local'),
       _control = TextEditingController(text: 'http://esp32cam.local:81'),
-      _token = TextEditingController(),
-      _sample = TextEditingController();
+      _token = TextEditingController();
   CameraService? _camera;
   StreamSubscription<Uint8List>? _subscription;
   Timer? _demoTimer, _flashTimer;
   Uint8List? _frame, _snapshot;
-  GillAnalysis? _analysis;
+  VisualInspectionResult? _inspection;
+  FishPart _selectedPart = FishPart.gills;
   String? _message;
-  bool _busy = false, _flash = false, _demoConnected = false, _saved = false;
+  bool _busy = false, _flash = false, _demoConnected = false;
   int _resolution = 8, _ticks = 0;
   int _controlRevision = 0;
   DateTime _lastFrame = DateTime.fromMillisecondsSinceEpoch(0);
@@ -50,7 +50,6 @@ class _CameraScreenState extends State<CameraScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _session = DemoScope.maybeOf(context);
-    if (_demo && _sample.text.isEmpty) _sample.text = 'DEMO-GILLS-001';
   }
 
   @override
@@ -65,7 +64,7 @@ class _CameraScreenState extends State<CameraScreen>
     _camera?.close();
     _demoTimer?.cancel();
     _flashTimer?.cancel();
-    for (final c in [_stream, _control, _token, _sample]) {
+    for (final c in [_stream, _control, _token]) {
       c.dispose();
     }
     super.dispose();
@@ -157,15 +156,15 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Future<void> _analyze(Uint8List bytes) async {
-    final jpeg = await compute(prepareGillSnapshot, bytes);
+    final result = await compute(
+      VisualInspectionService.inspect,
+      VisualInspectionRequest(bytes, _selectedPart),
+    );
     if (!mounted) return;
     setState(() {
-      _snapshot = jpeg;
-      _analysis = null;
-      _saved = false;
+      _snapshot = bytes;
+      _inspection = result;
     });
-    final result = await compute(analyzeGills, jpeg);
-    if (mounted) setState(() => _analysis = result);
   }
 
   Future<void> _capture() async {
@@ -173,56 +172,6 @@ class _CameraScreenState extends State<CameraScreen>
     if (!mounted) return;
     final bytes = _demo ? _frame! : await _camera!.capture();
     await _analyze(bytes);
-  }
-
-  Future<void> _save() async {
-    if (!_demo && !widget.canSave) {
-      showNotice(
-        context,
-        'An approved Inspector role is required to save cloud analyses. You can still capture and analyze locally.',
-      );
-      return;
-    }
-    if (_saved) {
-      showNotice(
-        context,
-        'This inspection has already been saved. Capture another image to create a new inspection.',
-      );
-      return;
-    }
-    if (_analysis == null) await _capture();
-    if (!mounted || _analysis == null) return;
-    final id = _sample.text.trim();
-    if (!RegExp(r'^[A-Za-z0-9_-]{1,100}$').hasMatch(id)) {
-      throw const FormatException(
-        'Enter a sample ID with 1–100 letters, numbers, underscores or hyphens.',
-      );
-    }
-    if (_demo) {
-      _session!.saveAnalysis(id, _analysis!);
-    } else {
-      await FirebaseService.uploadAnalysis(
-        sampleId: id,
-        imageBytes: _snapshot!,
-        fileName: 'gills.jpg',
-        meanHue: _analysis!.hue,
-        classification: _analysis!.classification,
-        hsvMetrics: {
-          'meanSaturation': _analysis!.saturation,
-          'meanValue': _analysis!.value,
-          'redFraction': _analysis!.redFraction,
-          'usableFraction': _analysis!.usableFraction,
-        },
-      );
-    }
-    if (mounted) {
-      setState(() {
-        _saved = true;
-        _message = _demo
-            ? 'Demo inspection saved to session history. Nothing was uploaded.'
-            : 'Image and analysis saved to cloud.';
-      });
-    }
   }
 
   Future<void> _setFlash(bool value) async {
@@ -249,7 +198,9 @@ class _CameraScreenState extends State<CameraScreen>
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(
+        MediaQuery.sizeOf(context).width < 400 ? 12 : 24,
+      ),
       children: [
         Text(
           'Camera & gill analysis',
@@ -399,7 +350,7 @@ class _CameraScreenState extends State<CameraScreen>
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   SizedBox(
-                    width: 220,
+                    width: 200,
                     child: SoftField(
                       child: DropdownButtonFormField<int>(
                         key: ValueKey('$_resolution-$_controlRevision'),
@@ -452,6 +403,30 @@ class _CameraScreenState extends State<CameraScreen>
                     ],
                   ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: DropdownButtonFormField<FishPart>(
+                  key: ValueKey(_selectedPart),
+                  initialValue: _selectedPart,
+                  decoration: const InputDecoration(
+                    labelText: 'Visible fish part',
+                  ),
+                  items: FishPart.values
+                      .map((part) => DropdownMenuItem(
+                            value: part,
+                            child: Text(part.label),
+                          ))
+                      .toList(),
+                  onChanged: _busy
+                      ? null
+                      : (part) {
+                          if (part != null) {
+                            setState(() => _selectedPart = part);
+                          }
+                        },
+                ),
               ),
               const SizedBox(height: 20),
               Wrap(
@@ -558,7 +533,7 @@ class _CameraScreenState extends State<CameraScreen>
               ),
               const SizedBox(height: 12),
               const Text(
-                'Adaptive HSV analysis evaluates color, saturation, and gill red fraction across the inspection region.',
+                'Choose the visible fish part manually. Image quality is checked, but no freshness prediction is made without a validated model.',
               ),
               if (_snapshot != null)
                 Padding(
@@ -572,7 +547,7 @@ class _CameraScreenState extends State<CameraScreen>
                     ),
                   ),
                 ),
-              if (_analysis case final a?) ...[
+              if (_inspection case final a?) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -606,6 +581,7 @@ class _CameraScreenState extends State<CameraScreen>
                             backgroundColor: switch (a.classification) {
                               'Fresh' => AppColors.fresh,
                               'Moderate' => AppColors.moderate,
+                              'Inconclusive' => AppColors.moderate,
                               _ => AppColors.spoiled,
                             },
                             side: BorderSide.none,
@@ -651,23 +627,8 @@ class _CameraScreenState extends State<CameraScreen>
                   child: Text('Capture or import an image to begin.'),
                 ),
               const SizedBox(height: 20),
-              SoftField(
-                child: TextField(
-                  controller: _sample,
-                  decoration: const InputDecoration(
-                    labelText: 'Sample ID for inspection record',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SoftButton(
-                label: _saved
-                    ? 'Saved inspection'
-                    : 'Save inspection image & result',
-                icon: Icons.save_outlined,
-                primary: true,
-                busy: _busy,
-                onPressed: () => _work(_save),
+              const Text(
+                'Saving a freshness classification is disabled until model labels and validation evidence are available.',
               ),
             ],
           ),

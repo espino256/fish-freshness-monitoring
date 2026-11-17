@@ -2,6 +2,12 @@
 
 Flutter application plus ESP32 DevKit V1 pH firmware and AI Thinker ESP32-CAM firmware. All authentication is live Firebase: registration, email/password login, Google login, password reset, verification and sign-out. There is no simulated sign-in, local account, guest login or authentication bypass.
 
+## Verification status
+
+Visual freshness prediction is intentionally **Inconclusive** until a per-part TensorFlow Lite model, its label mapping, preprocessing specification, and independent evaluation evidence are supplied. The camera lets the user select gills, eyes, or skin/scales and performs only basic image-quality checks.
+
+ESP32-owned live telemetry uses `/telemetry` and immutable `/readings`. Inspector-confirmed fish/session associations are stored separately in `/measurement_history`; the legacy `/FishSamples` tree is not written. See `docs/AI_MODEL_REQUIREMENTS.md` and `docs/ANDROID_RELEASE_GUIDE.md` before deploying.
+
 ## Start here
 
 Requirements: Flutter 3.38.6 / Dart 3.10.7 or compatible newer SDK and a configured Firebase project with Email/Password Authentication, Realtime Database and Cloud Storage. Enable Google Authentication if using the Google button. ESP32 boards are needed for live telemetry/video. Node 22+ and Java 21 are needed for administrative tools and emulator tests.

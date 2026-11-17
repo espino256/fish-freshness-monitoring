@@ -1,6 +1,5 @@
 
 import 'package:firebase_database/firebase_database.dart'; 
-import 'ph_measurement_history_service.dart';
 
 class PhMeasurementHistoryService {
   PhMeasurementHistoryService({
@@ -9,8 +8,12 @@ class PhMeasurementHistoryService {
 
   final FirebaseDatabase _database;
 
-  DatabaseReference get _fishSamples =>
-      _database.ref('FishSamples');
+  /// Confirmed, user-associated measurements live outside device telemetry.
+  ///
+  /// ESP32 firmware owns `/telemetry` and `/readings`; it must never be
+  /// overwritten when an inspector records a measurement against a sample.
+  DatabaseReference get _measurementHistory =>
+      _database.ref('measurement_history');
 
   /// Saves one confirmed pH measurement.
   ///
@@ -46,8 +49,7 @@ class PhMeasurementHistoryService {
       );
     }
 
-    final recordRef =
-        _fishSamples.child('measurement_history').push();
+    final recordRef = _measurementHistory.push();
 
     final recordId = recordRef.key;
 
@@ -58,32 +60,25 @@ class PhMeasurementHistoryService {
     }
 
     final measurement = <String, Object>{
-      'measurement_record_id': recordId,
-      'fish_or_session_id': sessionId,
-      'phValue': phValue,
+      'measurementId': recordId,
+      'fishOrSessionId': sessionId,
+      'ph': phValue,
       'status': cleanStatus,
       'timestamp': ServerValue.timestamp,
       'source': source,
     };
 
-    // Atomically update both database paths.
-    await _fishSamples.update({
-      'measurement_history/$recordId': measurement,
-      'current_reading/phValue': phValue,
-      'current_reading/status': cleanStatus,
-      'current_reading/fish_or_session_id': sessionId,
-      'current_reading/measurement_record_id': recordId,
-      'current_reading/timestamp': ServerValue.timestamp,
-    });
+    // A confirmed record is immutable. Do not write the legacy FishSamples
+    // current_reading path: it is intentionally denied by the current rules
+    // and is not the ESP32's live telemetry source.
+    await recordRef.set(measurement);
 
     return recordId;
   }
 
   /// Reads saved measurement history.
   Future<List<Map<String, dynamic>>> getHistory() async {
-    final snapshot = await _fishSamples
-        .child('measurement_history')
-        .get();
+    final snapshot = await _measurementHistory.get();
 
     if (!snapshot.exists || snapshot.value == null) {
       return [];
@@ -106,7 +101,7 @@ class PhMeasurementHistoryService {
         );
 
         record.putIfAbsent(
-          'measurement_record_id',
+          'measurementId',
           () => entry.key.toString(),
         );
 

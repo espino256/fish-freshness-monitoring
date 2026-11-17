@@ -74,6 +74,21 @@
         }
       }
     },
+    "measurement_history": {
+      ".read": "auth != null && auth.token.email_verified == true && auth.token.role != 'ph_device' && auth.token.role != 'camera_device'",
+      ".indexOn": ["timestamp", "fishOrSessionId"],
+      "$id": {
+        ".write": "auth != null && auth.token.email_verified == true && (auth.token.role == 'inspector' || auth.token.role == 'admin') && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['measurementId', 'fishOrSessionId', 'ph', 'status', 'source', 'timestamp'])",
+        "measurementId": { ".validate": "newData.isString() && newData.val() == $id" },
+        "fishOrSessionId": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+        "ph": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 14" },
+        "status": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50" },
+        "source": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+        "timestamp": { ".validate": "newData.isNumber() && newData.val() == now" },
+        "$other": { ".validate": false }
+      }
+    },
     "analyses": {
       ".read": "auth != null && auth.token.email_verified == true && auth.token.role != 'ph_device' && auth.token.role != 'camera_device'",
       ".indexOn": [
