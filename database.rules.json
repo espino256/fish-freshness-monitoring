@@ -131,6 +131,59 @@
           ".validate": false
         }
       }
+    },
+    "visual_inspections": {
+      ".read": "auth != null && auth.token.email_verified == true && auth.token.role != 'ph_device' && auth.token.role != 'camera_device'",
+      ".indexOn": ["timestamp"],
+      "$id": {
+        ".write": "auth != null && auth.token.email_verified == true && (auth.token.role == 'inspector' || auth.token.role == 'admin') && !data.exists() && newData.exists() && newData.child('createdBy').val() == auth.uid",
+        ".validate": "newData.hasChildren(['part', 'classification', 'imageUsable', 'width', 'height', 'experimentalModel', 'inferenceStatus', 'timestamp', 'createdBy'])",
+        "part": {
+          ".validate": "newData.val() == 'gills' || newData.val() == 'eyes' || newData.val() == 'skinScales'"
+        },
+        "classification": {
+          ".validate": "newData.val() == 'Fresh' || newData.val() == 'Moderate' || newData.val() == 'Spoiled' || newData.val() == 'Inconclusive'"
+        },
+        "imageUsable": {
+          ".validate": "newData.isBoolean()"
+        },
+        "width": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 16000"
+        },
+        "height": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 16000"
+        },
+        "experimentalModel": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+        },
+        "inferenceStatus": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber() && newData.val() == now"
+        },
+        "createdBy": {
+          ".validate": "newData.isString() && newData.val() == auth.uid"
+        },
+        "meanHue": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 360"
+        },
+        "meanSaturation": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+        },
+        "meanValue": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+        },
+        "redFraction": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+        },
+        "usableFraction": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }

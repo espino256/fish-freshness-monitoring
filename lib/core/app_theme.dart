@@ -52,17 +52,22 @@ abstract final class AppTheme {
         ),
         headlineMedium: TextStyle(
           color: AppColors.ink,
-          fontSize: 24,
+          fontSize: 28,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.3,
         ),
         titleLarge: TextStyle(
           color: AppColors.ink,
-          fontSize: 18,
+          fontSize: 20,
           fontWeight: FontWeight.w700,
         ),
-        bodyLarge: TextStyle(color: AppColors.ink, fontSize: 15),
-        bodyMedium: TextStyle(color: AppColors.muted, fontSize: 13),
+        bodyLarge: TextStyle(color: AppColors.ink, fontSize: 16, height: 1.45),
+        bodyMedium: TextStyle(
+          color: AppColors.muted,
+          fontSize: 14,
+          height: 1.45,
+        ),
+        bodySmall: TextStyle(color: AppColors.muted, fontSize: 12, height: 1.4),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

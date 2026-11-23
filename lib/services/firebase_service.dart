@@ -8,6 +8,10 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../firebase_options.dart';
 import '../models/fish_sample.dart';
+import '../models/experimental_ai.dart';
+import '../models/image_region.dart';
+import '../models/visual_inspection.dart';
+import '../models/visual_inspection_history.dart';
 import 'registration_service.dart';
 
 class RegistrationSetupState {
@@ -239,7 +243,6 @@ abstract final class FirebaseService {
     return FirebaseDatabase.instance
         .ref('analyses')
         .orderByChild('timestamp')
-        .limitToLast(500)
         .onValue
         .map((event) {
           final value = event.snapshot.value;
@@ -258,6 +261,77 @@ abstract final class FirebaseService {
           records.sort((a, b) => b.timestamp.compareTo(a.timestamp));
           return records;
         });
+  }
+
+  static Stream<List<VisualInspectionHistoryRecord>> watchVisualInspections() {
+    _requireReady();
+    return FirebaseDatabase.instance
+        .ref('visual_inspections')
+        .orderByChild('timestamp')
+        .onValue
+        .map((event) {
+          final value = event.snapshot.value;
+          if (value == null) return <VisualInspectionHistoryRecord>[];
+          if (value is! Map) {
+            throw const FormatException(
+              'Firebase visual inspections must be an object.',
+            );
+          }
+          final records = value.entries
+              .map(
+                (entry) => VisualInspectionHistoryRecord.fromFirebase(
+                  entry.key.toString(),
+                  entry.value,
+                ),
+              )
+              .toList();
+          records.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          return records;
+        });
+  }
+
+  static Future<String> saveVisualInspection(
+    VisualInspectionResult inspection,
+    ExperimentalFishModel model,
+  ) async {
+    _requireSignedIn();
+    final user = currentUser!;
+    final reference = FirebaseDatabase.instance
+        .ref('visual_inspections')
+        .push();
+    final id = reference.key;
+    if (id == null) throw StateError('Unable to create inspection record ID.');
+    final measurements = inspection.measurements;
+    final record = <String, Object?>{
+      'part': inspection.part.name,
+      'classification': inspection.classification,
+      'imageUsable': inspection.isImageUsable,
+      'width': inspection.width,
+      'height': inspection.height,
+      'experimentalModel': model.filename,
+      'inferenceStatus': inspection.experimentalAi?.status.name ?? 'not_run',
+      'timestamp': ServerValue.timestamp,
+      'createdBy': user.uid,
+      ..._finiteMeasurements(measurements),
+    };
+    await reference.set(record);
+    return id;
+  }
+
+  static Map<String, Object> _finiteMeasurements(
+    ImageRegionMeasurements? measurements,
+  ) {
+    final values = <String, Object>{};
+    void add(String key, double? value) {
+      if (value != null && value.isFinite) values[key] = value;
+    }
+
+    add('meanHue', measurements?.meanHue);
+    add('meanSaturation', measurements?.meanSaturation);
+    add('meanValue', measurements?.meanValue);
+    add('redFraction', measurements?.redFraction);
+    add('usableFraction', measurements?.usableFraction);
+    return values;
   }
 
   static Stream<List<DeviceStatus>> watchDevices() {

@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 import 'package:aqua_sense/models/telemetry.dart';
+import 'package:aqua_sense/models/visual_inspection.dart';
+import 'package:aqua_sense/models/visual_inspection_history.dart';
 import 'package:aqua_sense/screens/history_screen.dart';
 import 'package:aqua_sense/services/camera_service.dart';
 import 'package:aqua_sense/services/gill_analysis_service.dart';
@@ -116,5 +118,55 @@ void main() {
     expect(csv, contains("'=HYPERLINK"));
     expect(csv, contains('""bad""'));
     expect(csv, contains('2026-01-01T00:00:00.000Z'));
+  });
+
+  test('visual inspection history preserves all supported fish parts', () {
+    for (final part in FishPart.values) {
+      final record = VisualInspectionHistoryRecord.fromFirebase('inspection', {
+        'part': part.name,
+        'timestamp': 1790000000000,
+        'classification': 'Inconclusive',
+        'imageUsable': true,
+        'width': 640,
+        'height': 480,
+        'experimentalModel': 'candidate.tflite',
+        'inferenceStatus': 'completed',
+        'meanHue': 120,
+      });
+      expect(record.part, part);
+      expect(record.timestamp.toUtc(), DateTime.utc(2026, 9, 21, 14, 13, 20));
+      final csv = historyCsv([], [], false, [
+        VisualInspectionHistoryRecord(
+          id: record.id,
+          part: record.part,
+          timestamp: record.timestamp,
+          classification: record.classification,
+          imageUsable: record.imageUsable,
+          width: record.width,
+          height: record.height,
+          experimentalModel: record.experimentalModel,
+          inferenceStatus: record.inferenceStatus,
+          meanHue: record.meanHue,
+        ),
+      ]);
+      expect(csv, contains(part.label));
+      expect(csv, contains(record.timestamp.toIso8601String()));
+    }
+  });
+
+  test('visual inspection history rejects malformed required fields', () {
+    expect(
+      () => VisualInspectionHistoryRecord.fromFirebase('bad', {
+        'part': 'unknown',
+        'timestamp': 1790000000000,
+        'classification': 'Inconclusive',
+        'imageUsable': true,
+        'width': 640,
+        'height': 480,
+        'experimentalModel': 'candidate.tflite',
+        'inferenceStatus': 'completed',
+      }),
+      throwsFormatException,
+    );
   });
 }

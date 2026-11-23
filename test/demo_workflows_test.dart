@@ -227,7 +227,7 @@ void main() {
     },
   );
   testWidgets(
-    'camera processes injected target, flash, resolution, HSV and local fixture history',
+    'camera controls and image checks do not create a freshness prediction',
     (tester) async {
       tester.view.physicalSize = const Size(900, 1500);
       tester.view.devicePixelRatio = 1;
@@ -255,7 +255,12 @@ void main() {
       await tester.pumpAndSettle();
       await tapText(tester, 'Capture & analyze');
       await reveal(tester, find.text('INCONCLUSIVE'));
-      expect(find.textContaining('validated model'), findsOneWidget);
+      expect(
+        find.textContaining('No validated model is available for Gills'),
+        findsOneWidget,
+      );
+      expect(find.text('N/A'), findsNWidgets(5));
+      expect(find.textContaining('NaN'), findsNothing);
       expect(data.images, isEmpty);
       await tester.pumpWidget(const SizedBox());
     },

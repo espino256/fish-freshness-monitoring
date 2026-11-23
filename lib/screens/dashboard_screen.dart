@@ -4,6 +4,8 @@ import '../core/app_theme.dart';
 import '../models/telemetry.dart';
 import '../services/demo_session.dart';
 import '../widgets/soft_ui.dart';
+import '../widgets/inspection_card.dart';
+import '../widgets/live_ph_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -11,11 +13,13 @@ class DashboardScreen extends StatefulWidget {
     required this.readings,
     this.historyReadings,
     this.onRefresh,
+    this.telemetryUnavailableReason,
   });
 
   final Stream<List<Telemetry>> readings;
   final Stream<List<Telemetry>>? historyReadings;
   final VoidCallback? onRefresh;
+  final String? telemetryUnavailableReason;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -23,36 +27,6 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _timer;
-
-  static final List<Telemetry> _defaultLiveTelemetry = [
-    Telemetry(
-      id: 'default-live-1',
-      deviceId: 'ESP32-PH-01',
-      ph: 6.32,
-      adcRaw: 2150.0,
-      measuredVoltage: 1.748,
-      timestamp: DateTime.now().toUtc(),
-    ),
-  ];
-
-  static final List<Telemetry> _defaultHistoryTelemetry = List.generate(36, (i) {
-    final double phVal;
-    if (i < 24) {
-      phVal = 6.10 + (i % 5) * 0.08;
-    } else if (i < 32) {
-      phVal = 6.55 + (i % 4) * 0.12;
-    } else {
-      phVal = 7.25 + (i % 4) * 0.08;
-    }
-    return Telemetry(
-      id: 'default-hist-$i',
-      deviceId: 'ESP32-PH-01',
-      ph: phVal,
-      adcRaw: (phVal / 14 * 3200 + 400),
-      measuredVoltage: 1.733 + (phVal - 6.0) * 0.09,
-      timestamp: DateTime.now().toUtc().subtract(Duration(minutes: (36 - i) * 15)),
-    );
-  });
 
   @override
   void initState() {
@@ -76,7 +50,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return StreamBuilder<List<Telemetry>>(
       stream: widget.readings,
       builder: (context, snapshot) {
-        final rows = snapshot.data ?? [];
+        final rows = (snapshot.data ?? <Telemetry>[])
+            .where((r) => r.hasValidSensorValues)
+            .toList();
 
         // If historyReadings is null, avoid subscribing twice to widget.readings
         if (widget.historyReadings == null) {
@@ -86,7 +62,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return StreamBuilder<List<Telemetry>>(
           stream: widget.historyReadings!,
           builder: (context, historySnapshot) {
-            final historyData = historySnapshot.data ?? rows;
+            final historyData = historySnapshot.hasError
+                ? <Telemetry>[]
+                : (historySnapshot.data ?? <Telemetry>[])
+                      .where((r) => r.hasValidSensorValues)
+                      .toList();
             return _buildContent(
               context,
               snapshot,
@@ -109,12 +89,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     DemoSession? session,
     bool demo,
   ) {
-    final activeLive = liveRows.isEmpty ? _defaultLiveTelemetry : liveRows;
-    final activeHistory =
-        historyRows.isEmpty ? _defaultHistoryTelemetry : historyRows;
+    final activeLive = liveRows;
+    final activeHistory = widget.telemetryUnavailableReason == null
+        ? historyRows
+        : <Telemetry>[];
 
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    return ResponsivePageList(
       children: [
         Text(
           'Monitoring overview',
@@ -127,48 +107,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               : 'ESP32 DevKit V1 · GPIO34 · 12-bit ADC',
         ),
         const SizedBox(height: 24),
-        if (snapshot.hasError)
-          SoftPanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Unable to read telemetry. Check network, email verification, and database rules.',
-                ),
-                const SizedBox(height: 16),
-                SoftButton(
-                  label: 'Refresh telemetry',
-                  icon: Icons.refresh,
-                  onPressed: () {
-                    widget.onRefresh?.call();
-                    if (widget.onRefresh == null) {
-                      showNotice(context, 'Check your connection and retry.');
-                    }
-                  },
-                ),
-              ],
-            ),
-          )
-        else if (liveRows.isEmpty && !demo) ...[
-          const SoftPanel(
-            child: Text(
-              'No telemetry yet. Calibrate and connect the pH device.',
-            ),
-          ),
-          const SizedBox(height: 24),
+        LivePhCard(
+          snapshot: snapshot,
+          unavailableReason: widget.telemetryUnavailableReason,
+          simulated: demo,
+          onRefresh: widget.onRefresh,
+        ),
+        const SizedBox(height: 24),
+        if (!snapshot.hasError && widget.telemetryUnavailableReason == null)
           for (final reading in activeLive)
             Padding(
               padding: const EdgeInsets.only(bottom: 24),
               child: _ReadingCard(reading: reading, session: session),
             ),
-        ] else ...[
-          for (final reading in activeLive)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: _ReadingCard(reading: reading, session: session),
-            ),
-        ],
-
         if (demo) ...[
           SoftPanel(
             child: Column(
@@ -219,6 +170,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
 
         // Analytics & Visual Charts Section
+        if (activeHistory.isEmpty)
+          const SoftPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Sensor history',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'No received history is available for charts. Readings appear after the calibrated sensor publishes data.',
+                ),
+              ],
+            ),
+          ),
         _AnalyticsOverviewCard(telemetryList: activeHistory),
         const SizedBox(height: 24),
         _TelemetryTrendChart(telemetryList: activeHistory),
@@ -283,31 +250,17 @@ class _ReadingCard extends StatelessWidget {
                       : '${demo ? 'DEMO' : 'LIVE'} · ${reading.status.name.toUpperCase()}',
                 ),
                 side: BorderSide.none,
-                backgroundColor: color.withValues(alpha: .12),
+                backgroundColor: (stale ? AppColors.muted : color).withValues(
+                  alpha: .12,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            'pH ${reading.ph.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.w700,
-              color: stale ? AppColors.muted : color,
-            ),
+          const Text(
+            'Physical GPIO indicators · existing firmware pH bands',
+            style: TextStyle(color: AppColors.muted),
           ),
-          Text('ADC ${reading.adcRaw.toStringAsFixed(1)} / 4095'),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 24,
-            runSpacing: 12,
-            children: [
-              Text('Nominal ${reading.nominalVoltage.toStringAsFixed(3)} V'),
-              Text('Measured ${reading.measuredVoltage.toStringAsFixed(3)} V'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text('Updated ${reading.timestamp.toLocal().toString().substring(0, 19)}'),
           const SizedBox(height: 24),
           Row(
             children: [
@@ -425,12 +378,15 @@ class _AnalyticsOverviewCard extends StatelessWidget {
         telemetryList.map((e) => e.measuredVoltage).reduce((a, b) => a + b) /
         total;
 
-    final freshCount =
-        telemetryList.where((e) => e.status == FishStatus.fresh).length;
-    final moderateCount =
-        telemetryList.where((e) => e.status == FishStatus.moderate).length;
-    final spoiledCount =
-        telemetryList.where((e) => e.status == FishStatus.spoiled).length;
+    final freshCount = telemetryList
+        .where((e) => e.status == FishStatus.fresh)
+        .length;
+    final moderateCount = telemetryList
+        .where((e) => e.status == FishStatus.moderate)
+        .length;
+    final spoiledCount = telemetryList
+        .where((e) => e.status == FishStatus.spoiled)
+        .length;
 
     final freshPct = (freshCount / total * 100).round();
 
@@ -445,45 +401,26 @@ class _AnalyticsOverviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  'Analytics Summary',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: overallColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'AVG ${overallStatus.name.toUpperCase()}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: overallColor,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Sensor history summary',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 10),
+          InspectionBadge(
+            label: 'Average firmware band: ${overallStatus.name.toUpperCase()}',
+            color: overallColor,
           ),
           const SizedBox(height: 16),
           // Metric Cards Grid
           LayoutBuilder(
             builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 500;
-              final itemWidth = isWide
-                  ? (constraints.maxWidth - 36) / 4
-                  : (constraints.maxWidth - 12) / 2;
+              final scale = MediaQuery.textScalerOf(context).scale(1);
+              final columns =
+                  ((constraints.maxWidth + 12) / (scale > 1.3 ? 230 : 170))
+                      .floor()
+                      .clamp(1, 4);
+              final itemWidth =
+                  (constraints.maxWidth - 12 * (columns - 1)) / columns;
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -498,9 +435,9 @@ class _AnalyticsOverviewCard extends StatelessWidget {
                   ),
                   _KpiStatBox(
                     width: itemWidth,
-                    label: 'FRESHNESS RATE',
+                    label: 'READINGS BELOW 6.5',
                     value: '$freshPct%',
-                    unit: 'of dataset',
+                    unit: 'of received records',
                     color: AppColors.fresh,
                     icon: Icons.check_circle_outline,
                   ),
@@ -526,7 +463,7 @@ class _AnalyticsOverviewCard extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Freshness Distribution Diagram',
+            'Firmware pH range distribution',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
@@ -601,77 +538,42 @@ class _KpiStatBox extends StatelessWidget {
     required this.color,
     required this.icon,
   });
-
   final double width;
-  final String label;
-  final String value;
-  final String unit;
+  final String label, value, unit;
   final Color color;
   final IconData icon;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.line.withValues(alpha: 0.8)),
-      ),
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    child: InspectionCard(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.muted,
-                    letterSpacing: 0.3,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Icon(icon, size: 14, color: color),
-            ],
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: color,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  unit,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.muted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: color,
             ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            unit,
+            style: const TextStyle(fontSize: 13, color: AppColors.muted),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _DiagramLegendPill extends StatelessWidget {
@@ -743,7 +645,8 @@ class _TelemetryTrendChartState extends State<_TelemetryTrendChart> {
         ? sortedData.sublist(sortedData.length - 36)
         : sortedData;
 
-    final selectedIdx = (_selectedIndex != null &&
+    final selectedIdx =
+        (_selectedIndex != null &&
             _selectedIndex! >= 0 &&
             _selectedIndex! < points.length)
         ? _selectedIndex!
@@ -760,61 +663,16 @@ class _TelemetryTrendChartState extends State<_TelemetryTrendChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Historical pH curve (${points.length} points)',
-                      style: Theme.of(context).textTheme.titleLarge,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Real-time & historic telemetry curve',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: selectedColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: selectedColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'pH ${selected.ph.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: selectedColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Historical pH curve (${points.length} points)',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          const Text('Received telemetry · latest 36 points'),
+          const SizedBox(height: 10),
+          InspectionBadge(
+            label: 'pH ${selected.ph.toStringAsFixed(2)}',
+            color: selectedColor,
           ),
           const SizedBox(height: 14),
           // Tooltip inspector bar
@@ -827,11 +685,7 @@ class _TelemetryTrendChartState extends State<_TelemetryTrendChart> {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.touch_app_outlined,
-                  size: 16,
-                  color: AppColors.teal,
-                ),
+                Icon(Icons.touch_app_outlined, size: 16, color: AppColors.teal),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -853,8 +707,10 @@ class _TelemetryTrendChartState extends State<_TelemetryTrendChart> {
             height: 200,
             width: double.infinity,
             child: GestureDetector(
-              onTapDown: (details) => _onChartTouch(details.localPosition, points),
-              onPanUpdate: (details) => _onChartTouch(details.localPosition, points),
+              onTapDown: (details) =>
+                  _onChartTouch(details.localPosition, points),
+              onPanUpdate: (details) =>
+                  _onChartTouch(details.localPosition, points),
               child: CustomPaint(
                 painter: _TelemetryChartPainter(
                   readings: points,
@@ -865,15 +721,19 @@ class _TelemetryTrendChartState extends State<_TelemetryTrendChart> {
           ),
           const SizedBox(height: 14),
           // Zone Legend
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          const Wrap(
+            spacing: 16,
+            runSpacing: 10,
             children: [
               _ZoneLegendItem(label: 'Fresh (<6.5)', color: AppColors.fresh),
               _ZoneLegendItem(
                 label: 'Moderate (6.5–7.2)',
                 color: AppColors.moderate,
               ),
-              _ZoneLegendItem(label: 'Spoiled (≥7.2)', color: AppColors.spoiled),
+              _ZoneLegendItem(
+                label: 'Spoiled (≥7.2)',
+                color: AppColors.spoiled,
+              ),
             ],
           ),
         ],
@@ -892,7 +752,10 @@ class _TelemetryTrendChartState extends State<_TelemetryTrendChart> {
 
     final touchX = (pos.dx - paddingLeft).clamp(0.0, chartWidth);
     final ratio = touchX / chartWidth;
-    final idx = (ratio * (points.length - 1)).round().clamp(0, points.length - 1);
+    final idx = (ratio * (points.length - 1)).round().clamp(
+      0,
+      points.length - 1,
+    );
 
     setState(() {
       _selectedIndex = idx;
@@ -917,12 +780,14 @@ class _ZoneLegendItem extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.muted,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.muted,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -932,10 +797,7 @@ class _ZoneLegendItem extends StatelessWidget {
 
 /// CustomPainter that renders pH trend curve, reference freshness bands, and point selection
 class _TelemetryChartPainter extends CustomPainter {
-  _TelemetryChartPainter({
-    required this.readings,
-    required this.selectedIndex,
-  });
+  _TelemetryChartPainter({required this.readings, required this.selectedIndex});
 
   final List<Telemetry> readings;
   final int selectedIndex;
@@ -1147,22 +1009,10 @@ class _TelemetryChartPainter extends CustomPainter {
             8.0,
             Paint()..color = statusColor.withValues(alpha: 0.25),
           );
-          canvas.drawCircle(
-            pt,
-            5.0,
-            Paint()..color = Colors.white,
-          );
-          canvas.drawCircle(
-            pt,
-            3.5,
-            Paint()..color = statusColor,
-          );
+          canvas.drawCircle(pt, 5.0, Paint()..color = Colors.white);
+          canvas.drawCircle(pt, 3.5, Paint()..color = statusColor);
         } else {
-          canvas.drawCircle(
-            pt,
-            3.0,
-            Paint()..color = statusColor,
-          );
+          canvas.drawCircle(pt, 3.0, Paint()..color = statusColor);
         }
       }
     }

@@ -1,0 +1,8 @@
+# Copy to android/key.properties for an existing release key.
+# Never commit the real file or use example passwords.
+# Relative storeFile paths resolve from android/app.
+# For an absolute Windows path use forward slashes, e.g. C:/private/release.jks.
+storeFile=aquasense-release.jks
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyAlias=aquasense-release
+keyPassword=YOUR_KEY_PASSWORD

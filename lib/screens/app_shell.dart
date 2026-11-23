@@ -5,6 +5,7 @@ import '../services/monitoring_repository.dart';
 import '../services/demo_session.dart';
 import '../models/telemetry.dart';
 import '../models/fish_sample.dart';
+import '../models/visual_inspection_history.dart';
 import '../widgets/soft_ui.dart';
 import '../widgets/aqua_brand_mark.dart';
 import '../widgets/account_setup_notice.dart';
@@ -34,7 +35,13 @@ class _AppShellState extends State<AppShell> {
   DemoSession? _session;
   Stream<List<Telemetry>>? _live, _history;
   Stream<List<VisualAnalysisRecord>>? _analyses;
-  static const labels = ['Dashboard', 'Camera & HSV', 'History', 'Settings'];
+  Stream<List<VisualInspectionHistoryRecord>>? _visualInspections;
+  static const labels = [
+    'Dashboard',
+    'Camera & AI Inspection',
+    'History',
+    'Settings',
+  ];
   static const icons = [
     Icons.dashboard_outlined,
     Icons.videocam_outlined,
@@ -56,17 +63,20 @@ class _AppShellState extends State<AppShell> {
       _live = _session!.live;
       _history = _session!.history;
       _analyses = _session!.analyses;
+      _visualInspections = _session!.inspectionHistory;
       _inspector = true;
     } else if (FirebaseService.isReady) {
       final repository = MonitoringRepository();
       _live = repository.watchLive();
       _history = repository.watchHistory();
       _analyses = FirebaseService.watchAnalyses();
+      _visualInspections = FirebaseService.watchVisualInspections();
       _refreshRole();
     } else {
       _live = Stream.value([]);
       _history = Stream.value([]);
       _analyses = Stream.value([]);
+      _visualInspections = Stream.value([]);
     }
   }
 
@@ -118,18 +128,41 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final demo = _session?.enabled == true;
+    final telemetryUnavailableReason = demo
+        ? null
+        : !FirebaseService.isReady
+        ? 'Firebase is not connected. Reconnect cloud services in Settings.'
+        : FirebaseService.currentUser == null
+        ? 'Sign in to view sensor pH readings.'
+        : !FirebaseService.currentUser!.emailVerified
+        ? 'Verify your email using the Verify button above, then refresh the sensor feed.'
+        : null;
     final content = switch (_tab) {
       0 => DashboardScreen(
         key: ValueKey('dashboard-$_revision'),
         readings: _live!,
         historyReadings: _history,
         onRefresh: _refresh,
+        telemetryUnavailableReason: telemetryUnavailableReason,
       ),
-      1 => CameraScreen(canSave: _inspector),
+      1 => CameraScreen(
+        canSave: _inspector,
+        onSaveInspection: (inspection, model) async {
+          if (_session?.enabled == true) {
+            _session!.saveVisualInspection(inspection, model);
+          } else {
+            await FirebaseService.saveVisualInspection(inspection, model);
+          }
+        },
+        phReadings: _live,
+        telemetryUnavailableReason: telemetryUnavailableReason,
+        onRefreshTelemetry: _refresh,
+      ),
       2 => HistoryScreen(
         key: ValueKey('history-$_revision'),
         readings: _history!,
         analyses: _analyses!,
+        visualInspections: _visualInspections!,
       ),
       _ => SettingsScreen(
         onRefresh: _refresh,
@@ -147,22 +180,24 @@ class _AppShellState extends State<AppShell> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 1000;
+            final short = constraints.maxHeight < 500;
+            final textScale = MediaQuery.textScalerOf(context).scale(1);
             return Column(
               children: [
                 Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: wide ? 36 : 16,
-                    vertical: 18,
+                    vertical: short ? 8 : 14,
                   ),
                   child: Row(
                     children: [
                       const AquaBrandMark(size: 38),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'AquaSense',
                               style: TextStyle(
                                 color: Colors.white,
@@ -170,14 +205,15 @@ class _AppShellState extends State<AppShell> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            Text(
-                              'FISH FRESHNESS MONITORING',
-                              style: TextStyle(
-                                color: Color(0xFFC5DDE2),
-                                fontSize: 9,
-                                letterSpacing: 1.1,
+                            if (!short)
+                              const Text(
+                                'FISH FRESHNESS MONITORING',
+                                style: TextStyle(
+                                  color: Color(0xFFC5DDE2),
+                                  fontSize: 9,
+                                  letterSpacing: 1.1,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -226,46 +262,49 @@ class _AppShellState extends State<AppShell> {
                       children: [
                         if (wide) ...[
                           SizedBox(
-                            width: 210,
+                            width: 256,
                             child: SoftPanel(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 22,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: Text(
-                                      'WORKSPACE',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        letterSpacing: 2,
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: Text(
+                                        'WORKSPACE',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          letterSpacing: 2,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  for (var i = 0; i < labels.length; i++)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 14,
+                                    for (var i = 0; i < labels.length; i++)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 14,
+                                        ),
+                                        child: SoftButton(
+                                          label: labels[i],
+                                          icon: icons[i],
+                                          primary: _tab == i,
+                                          onPressed: () =>
+                                              setState(() => _tab = i),
+                                        ),
                                       ),
-                                      child: SoftButton(
-                                        label: labels[i],
-                                        icon: icons[i],
-                                        primary: _tab == i,
-                                        onPressed: () =>
-                                            setState(() => _tab = i),
-                                      ),
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      demo
+                                          ? 'Sandbox session\nNo cloud writes'
+                                          : 'Secure Firebase access',
+                                      textAlign: TextAlign.center,
                                     ),
-                                  const Spacer(),
-                                  Text(
-                                    demo
-                                        ? 'Sandbox session\nNo cloud writes'
-                                        : 'Secure Firebase access',
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -290,14 +329,22 @@ class _AppShellState extends State<AppShell> {
                     child: SoftPanel(
                       padding: const EdgeInsets.all(4),
                       child: NavigationBar(
-                        height: 68,
+                        height: short
+                            ? 64
+                            : 76 + (textScale - 1).clamp(0, 2) * 40,
+                        labelBehavior: short
+                            ? NavigationDestinationLabelBehavior.alwaysHide
+                            : NavigationDestinationLabelBehavior.alwaysShow,
                         selectedIndex: _tab,
                         onDestinationSelected: (v) => setState(() => _tab = v),
                         destinations: [
                           for (var i = 0; i < labels.length; i++)
                             NavigationDestination(
                               icon: Icon(icons[i]),
-                              label: labels[i],
+                              label: i == 1 && constraints.maxWidth < 600
+                                  ? 'Inspect'
+                                  : labels[i],
+                              tooltip: labels[i],
                             ),
                         ],
                       ),

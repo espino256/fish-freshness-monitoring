@@ -22,7 +22,7 @@ A branded splash runs for 2.5 seconds at startup. If Firebase startup fails or t
 
 Registration has only Full name, Email address, Password and Confirm Password. It creates the Firebase Auth user, updates the Auth display name, saves displayName/email/createdAt under /users/{uid}, and sends verification. No role/category is selected or assigned by the client. Inspector privileges are still administrator-managed custom claims.
 
-The authenticated workspace has Dashboard, Camera & HSV, History and Settings, with responsive mobile navigation and a desktop sidebar. Dashboard subscribes to real telemetry, marks readings stale after 20 seconds, and displays pH, averaged ADC count and nominal/calibrated voltage. History loads the most recent 500 pH and 500 image records; tables show 50 matching rows, while filtered CSV includes the entire loaded window. Settings offers connection refresh, display contrast and About. No simulation controls or guest-session shortcuts are exposed by the production app.
+The authenticated workspace has Dashboard, Camera & AI Inspection, History and Settings, with responsive mobile navigation and a desktop sidebar. Dashboard subscribes to real telemetry, marks readings stale after 20 seconds, and displays pH, averaged ADC count and nominal/calibrated voltage. History loads the most recent 500 pH and 500 image records; tables show 50 matching rows, while filtered CSV includes the entire loaded window. Settings offers connection refresh, display contrast and About. No simulation controls or guest-session shortcuts are exposed by the production app.
 
 Shared SoftPanel, SoftField, SoftButton, AuthLayout and OceanBackdrop widgets preserve Neumorphic highlights/shadows, pressed/busy states, readable ocean colors and the bundled water background. [UI design notes](docs/ui-design.md) record the image asset and prompt. Synthetic sensor/image fixtures remain available only for component tests, independently of authentication; production AquaSenseApp does not install their scope or create local identities.
 ## Configuration and security
@@ -145,7 +145,7 @@ Copy `firmware/esp32_cam/secrets.example.h` to its local `secrets.h`. Set Wi-Fi,
 
 All endpoints require HTTP Basic authentication with username `camera` and the configured password. The app sends the authorization header, never credentials in the URL, and holds the password in memory only. Separate HTTP servers keep controls responsive during streaming; the camera mutex serializes sensor/capture access. Treat this as a single-viewer camera. Flash automatically turns off after 30 seconds to limit heat/current; the app switch also resets after 30 seconds. mDNS advertises `esp32cam.local` where supported.
 
-In the app, enter the two base URLs (`http://192.168.1.50` and `http://192.168.1.50:81`, for example), enter the password, then Connect stream. Streaming stops on tab changes or when the app leaves the foreground. Reconnect explicitly after a disconnect. Snapshot capture displays the image and runs HSV analysis; gallery import is also supported. Approved inspectors can enter a sample ID and save the inspection to Firebase.
+In the app, enter the two base URLs (`http://192.168.1.50` and `http://192.168.1.50:81`, for example), enter the password, then Connect stream. Streaming stops on tab changes or when the app leaves the foreground. Reconnect explicitly after a disconnect. Select Gills, Eyes, or Skin / Scales manually, then capture or import an image. Images passing basic checks run the corresponding experimental TFLite model; the fine-tuned Scales model is a separate explicit candidate. The screen shows raw indexed scores and inference status while confirmed freshness remains Inconclusive and unavailable measurements display `N/A`. Saving new image classifications remains disabled until validation is complete. Existing Firebase history and pH monitoring remain available.
 
 HTTP Basic authentication does **not** encrypt the LAN traffic. Use an isolated trusted Wi-Fi network, never forward these ports to the internet, and use a TLS gateway/VPN for remote access. The app rejects public HTTP camera hosts; HTTPS gateways are supported. Android cleartext is enabled for this LAN camera use; Firebase stays HTTPS. iOS declares local networking and its usage purpose; use `esp32cam.local` where numeric-IP ATS restrictions apply. Test permissions/transport on each target iOS version.
 
@@ -157,11 +157,15 @@ flutter run -d chrome --web-port 5000
 
 Browsers can block HTTP LAN cameras from HTTPS pages through mixed-content/private-network policies even with CORS. Use the native mobile build or a same-origin HTTPS camera gateway for a hosted web deployment. Do not disable browser security. The MJPEG client parses split JPEG markers, caps buffered frames at 2 MiB, limits render updates, times out stalled streams and closes connections on disposal.
 
-## HSV method and limitations
+## Visual inspection and model status
 
-The code analyzes the central 200 × 200 ROI after applying image orientation, on a worker isolate where supported. It computes circular mean hue, mean saturation/value and the fraction of usable pixels in the red hue sectors `[0°,20°] ∪ [340°,360°]`. It excludes saturation below 0.2, value below 0.15 and near-white glare; fewer than 20% usable pixels or a highly ambiguous circular mean requires recapture. Inputs are size-limited and decoded/re-encoded to JPEG before storage.
+The active camera route uses `AiInferenceService`, with `VisualInspectionService` preparing images on a worker isolate where supported. It checks JPEG/PNG decoding, dimensions, exposure and detail before inference. Passing those checks does not detect a fish or confirm the selected part. The four Colab exports run experimentally using `flutter_litert` 4.2.0; no heuristic freshness fallback is used. See [experimental integration and platform results](docs/EXPERIMENTAL_AI_INTEGRATION.md) and [the original model audit](docs/AI_MODEL_REQUIREMENTS.md).
 
-The initial heuristic labels red fraction ≥0.6 Fresh, ≥0.3 Moderate, otherwise Spoiled. These are explicitly **experimental defaults**, since no calibrated dataset or validated HSV classifier was supplied. Center only the gills in the ROI and control exposure, lighting, white balance and fish species. pH and HSV estimates remain separate. Neither proves food safety, and these thresholds need empirical validation before operational acceptance decisions.
+The original bundled TFLite file remains preserved and unassigned. The new per-part exports display Output 0/1/2 until exact binary-to-label provenance is established. Notebook label conventions do not establish independent-fish validation; the reported Gills baseline has confirmed fish-level leakage. Legacy HSV utilities and their historical records/tests are retained for compatibility; their heuristic classifications are not the active camera workflow. Image inference does not produce pH measurements or save verified results.
+
+The inspection page separates the verified Inconclusive result from experimental indexed predictions and model-score bars. Draw and apply a manual fish-part rectangle to calculate circular mean hue, mean saturation/brightness, red-sector fraction and usable-area fraction from actual pixels. Descriptors remain `N/A` until a suitable region is applied; editing the region, rotating or changing image/part/model clears stale results. ROI descriptors do not crop or normalize the existing full-image RGB model tensor. See [the ROI redesign report](docs/AI_INSPECTION_ROI_REDESIGN.md) for formulas, mask/detail defaults, class-map limitations, model hashes and current test results.
+
+The [updated results and sensor pH UI](docs/RESULTS_AND_SENSOR_PH_UI.md) adds readable white/teal cards, responsive page widths and an independent live ESP32 pH card on both Dashboard and Camera & AI Inspection. Verify your email and connect the calibrated sensor to view real telemetry. Empty/error feeds display `pH N/A` with a reason; dashboard charts and history no longer substitute invented sensor/image records. Sensor values never become image-derived pH or automatically verified freshness results.
 
 ## Build and verify
 
@@ -174,7 +178,7 @@ flutter build web --release
 flutter build appbundle --release
 ```
 
-Android release builds require process environment variables `ANDROID_APPLICATION_ID`, `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Supply them through your protected local/CI environment; keystores are ignored. Release builds fail if these are missing and never fall back to a debug key. Set `ANDROID_APPLICATION_ID` for debug builds too when testing a Firebase app restricted to your registered package. The namespace remains `com.example.aqua_sense` to match the existing native activity. Configure iOS bundle ID, signing, associated Firebase app and target-device permissions before distribution.
+Android release signing uses the ignored `android/key.properties` file or process environment variables `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. The [Android release guide](docs/ANDROID_RELEASE_GUIDE.md) includes first-key setup for Windows and instructions for reusing an existing key. Release builds reject missing credentials and never fall back to a debug key. `ANDROID_APPLICATION_ID` optionally overrides the package ID; set it for debug builds too when testing a Firebase app restricted to your registered package. The namespace remains `com.example.aqua_sense` to match the existing native activity. Configure iOS bundle ID, signing, associated Firebase app and target-device permissions before distribution.
 
 Android uses Kotlin Gradle plugin 2.4.21 to match the Kotlin 2.4 metadata in the current Firebase Auth Android dependency. Gradle 8.14 and AGP 8.11.1 are within the [Kotlin plugin compatibility range](https://kotlinlang.org/docs/gradle-configure-project.html). D8/R8 is explicitly pinned to 9.1.29 using the [official R8 override mechanism](https://r8.googlesource.com/r8.git/) to support this metadata during release shrinking; see the [Android Kotlin/D8/R8 compatibility table](https://developer.android.com/build/kotlin-support).
 
@@ -223,7 +227,7 @@ lib/services/auth_session_controller.dart immediate SDK session and stale-event 
 lib/widgets/auth_navigation.dart       UID handoff and authentication stack clearing
 lib/screens/app_shell.dart            navigation and claims refresh
 lib/screens/dashboard_screen.dart     live pH and GPIO indicators
-lib/screens/camera_screen.dart        stream, controls, snapshot, HSV and save
+lib/screens/camera_screen.dart        stream, controls, manual part selection and image checks
 lib/screens/history_screen.dart       cloud tables, filters and CSV
 lib/screens/settings_screen.dart      live connection and contrast settings
 lib/services/demo_session.dart        synthetic sensor/image fixtures for component tests only
@@ -232,7 +236,8 @@ lib/widgets/auth_layout.dart          responsive auth form and desktop hero
 lib/models/telemetry.dart              telemetry validation and pH policy
 lib/services/monitoring_repository.dart bounded cloud history and live streams
 lib/services/camera_service.dart       HTTP controls and MJPEG parser
-lib/services/gill_analysis_service.dart HSV processing and image validation
+lib/services/visual_inspection_service.dart active image checks; abstains pending validated models
+lib/services/gill_analysis_service.dart retained legacy HSV research utility
 lib/services/firebase_service.dart     injected Firebase configuration/auth/storage
 lib/core/app_preferences.dart          display preferences without authentication state
 lib/widgets/auth_feedback.dart         authentication error mapping and Snackbars

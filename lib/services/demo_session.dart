@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import '../models/telemetry.dart';
 import '../models/fish_sample.dart';
+import '../models/experimental_ai.dart';
+import '../models/visual_inspection.dart';
+import '../models/visual_inspection_history.dart';
 import 'gill_analysis_service.dart';
 
 /// Synthetic telemetry/image fixtures for component tests. There are no local
@@ -17,6 +20,7 @@ class DemoSession extends ChangeNotifier {
   Timer? _timer;
   final List<Telemetry> records = [];
   final List<VisualAnalysisRecord> images = [];
+  final List<VisualInspectionHistoryRecord> visualInspections = [];
   final Map<int, bool> leds = {27: true, 25: false, 26: false};
   bool manualLeds = false;
 
@@ -29,6 +33,8 @@ class DemoSession extends ChangeNotifier {
   late final Stream<List<VisualAnalysisRecord>> analyses = _watch(
     () => List.unmodifiable(images),
   );
+  late final Stream<List<VisualInspectionHistoryRecord>> inspectionHistory =
+      _watch(() => List.unmodifiable(visualInspections));
   Stream<List<T>> _watch<T>(List<T> Function() read) => Stream.multi((sink) {
     void update() => sink.add(read());
     update();
@@ -60,7 +66,6 @@ class DemoSession extends ChangeNotifier {
         timestamp: DateTime.now().toUtc(),
       ),
     );
-    if (records.length > 500) records.removeLast();
   }
 
   void setPh(double value) {
@@ -102,6 +107,7 @@ class DemoSession extends ChangeNotifier {
   void clearHistory() {
     records.clear();
     images.clear();
+    visualInspections.clear();
     refresh();
   }
 
@@ -116,9 +122,38 @@ class DemoSession extends ChangeNotifier {
         timestamp: DateTime.now().toUtc(),
       ),
     );
-    if (images.length > 500) images.removeLast();
     notifyListeners();
   }
+
+  void saveVisualInspection(
+    VisualInspectionResult inspection,
+    ExperimentalFishModel model,
+  ) {
+    final measurements = inspection.measurements;
+    visualInspections.insert(
+      0,
+      VisualInspectionHistoryRecord(
+        id: 'demo-inspection-${_sequence++}',
+        part: inspection.part,
+        timestamp: DateTime.now().toUtc(),
+        classification: inspection.classification,
+        imageUsable: inspection.isImageUsable,
+        width: inspection.width,
+        height: inspection.height,
+        experimentalModel: model.filename,
+        inferenceStatus: inspection.experimentalAi?.status.name ?? 'not_run',
+        meanHue: _finite(measurements?.meanHue),
+        meanSaturation: _finite(measurements?.meanSaturation),
+        meanValue: _finite(measurements?.meanValue),
+        redFraction: _finite(measurements?.redFraction),
+        usableFraction: _finite(measurements?.usableFraction),
+      ),
+    );
+    notifyListeners();
+  }
+
+  double? _finite(double? value) =>
+      value != null && value.isFinite ? value : null;
 
   /// Synthetic calibration target, visibly labeled in the viewer. It is not a
   /// real fish photograph or inspection result.

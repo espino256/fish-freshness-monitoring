@@ -23,6 +23,20 @@ class Telemetry {
   final String id, deviceId;
   final double ph, adcRaw, measuredVoltage;
   final DateTime timestamp;
+
+  /// The same numeric contract required of ESP32 Firebase records.
+  bool get hasValidSensorValues =>
+      deviceId.isNotEmpty &&
+      ph.isFinite &&
+      ph >= 0 &&
+      ph <= 14 &&
+      adcRaw.isFinite &&
+      adcRaw >= 1 &&
+      adcRaw <= 4094 &&
+      measuredVoltage.isFinite &&
+      measuredVoltage >= 0 &&
+      measuredVoltage <= 3.3 &&
+      timestamp.millisecondsSinceEpoch > 0;
   double get nominalVoltage => adcRaw * 3.3 / 4095;
   FishStatus get status => classifyPh(ph);
   bool isStale(DateTime now) =>

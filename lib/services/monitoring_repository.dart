@@ -5,7 +5,6 @@ class MonitoringRepository {
   Stream<List<Telemetry>> watchHistory() => FirebaseDatabase.instance
       .ref('readings')
       .orderByChild('timestamp')
-      .limitToLast(500)
       .onValue
       .map((event) {
         final value = event.snapshot.value;

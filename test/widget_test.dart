@@ -94,7 +94,7 @@ void main() {
       MaterialApp(home: DashboardScreen(readings: Stream.value([stale]))),
     );
     await tester.pump();
-    expect(find.textContaining('STALE'), findsOneWidget);
+    expect(find.text('STALE'), findsOneWidget);
     expect(find.textContaining('LIVE'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
